@@ -9,15 +9,13 @@ log / stdout "{request_id} - {common}"
 errors stderr
 
 # Push-tester proxy
-proxy /sse-proxy http://sse-proxy {
-  without /sse-proxy
-  transparent
+proxy /sse-proxy {$SSE_PROXY} {
   header_upstream x-request-id {request_id}
   header_upstream connection ""
 }
 
 # Serve leftovers from frontend webserver
-proxy / http://overview-ui {
+proxy / {$FRONTEND} {
   transparent
   header_upstream x-request-id {request_id}
 }
