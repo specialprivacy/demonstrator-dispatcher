@@ -1,0 +1,24 @@
+:80
+
+# Fetch the request-id or get a new one
+request_id x-request-id
+header / x-request-id {request_id}
+
+# Make the logs docker friendly and inject the request-id
+log / stdout "{request_id} - {common}"
+errors stderr
+
+# Push-tester proxy
+proxy /sse-proxy http://sse-proxy {
+  without /sse-proxy
+  transparent
+  header_upstream x-request-id {request_id}
+  header_upstream connection ""
+}
+
+# Serve leftovers from frontend webserver
+proxy / http://overview-ui {
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
