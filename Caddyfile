@@ -10,8 +10,15 @@ errors stderr
 
 # Push-tester proxy
 proxy /sse-proxy {$SSE_PROXY} {
+  transparent
   header_upstream x-request-id {request_id}
   header_upstream connection ""
+}
+
+# Keycloak proxy
+proxy /auth {$KEYCLOAK_PROXY} {
+  transparent
+  header_upstream x-request-id {request_id}
 }
 
 # Serve leftovers from frontend webserver
