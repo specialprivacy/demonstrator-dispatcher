@@ -26,12 +26,31 @@ const dbTables = [applicationsTableName, dataControllerPoliciesTableName, dataSu
 
 let apps = {};
 
+function noop() {}
+
+function heartbeat() {
+  this.isAlive = true;
+}
+
+const interval = setInterval(function ping() {
+  ws.getWss().clients.forEach(function each(ws) {
+    if (ws.isAlive === false) {
+      console.debug("WebSocket dropped, terminating.");
+      return ws.terminate();
+    }
+
+    ws.isAlive = false;
+    ws.ping(noop);
+  });
+}, 30000);
+
 app.use(createConnection);
 
 app.ws("/follow", async (ws, req, next) => {
-  console.debug("/follow");
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
 
-  console.log("req:" +JSON.stringify(req.query));
+  console.debug("/follow");
 
   ws.on("message", function incoming(message) {
     console.debug("Received message: %s", message);
@@ -39,80 +58,111 @@ app.ws("/follow", async (ws, req, next) => {
     consentsTable.get(consent["id"]).update({"given": consent["given"], "date": Date.now()}).run(req._rdbConn);
   });
 
+  let appId = req.query.applicationId;
+  let userId = req.query.userId;
+
+  let eventName = "appChanged-"+appId;
+  let cursors = [];
+  let callback = null;
+
   ws.on("close", function(){
-    console.debug("Websocket was closed.");
+    console.debug("Websocket was closed, closing cursors.");
+    for(let cursor of cursors) {
+      cursor.close();
+    }
+    if(eventName){
+      console.debug("Removing listener on: "+eventName);
+      myEmitter.removeListener(eventName, callback);
+    }
     ws.terminate();
     next();
   });
 
-  let appId = req.query.applicationId;
-  let userId = req.query.userId;
-
-  myEmitter.on("appChanged-"+appId, async () => {
-    console.log("Event received");
+  myEmitter.on(eventName, callback = async () => {
+    console.debug("New policies have been detected for application: "+appId);
 
     let app = apps[appId];
     let policies = app["needed-policies"];
 
     console.debug("Application needs following policies: "+JSON.stringify(policies));
 
-    // TODO: /!\ Send a message to the client telling him remove all existing consents then we'll start filling them up again
-    ws.send(JSON.stringify({operationType: "unloadAll"}));
-
-    console.debug("Calculating and inserting missing consents");
-    let promises = [];
-    for(let policyKey in policies){
-      let policy = policies[policyKey];
-      await consentsTable.filter({userId})("policyId").coerceTo("array").contains(policy["id"]).not().run(req._rdbConn, function(err, result){
-        if(err){throw err;}
-        if(result){
-          console.debug("No consent generated for this policy, generating now.");
-          promises.push(consentsTable.insert({
-            userId,
-            policyId: policy["id"],
-            given: false,
-            date: Date.now()
-          }).run(req._rdbConn))
-        }
-        else{
-          console.debug("Consent already exists for this user and this policy.");
-        }
-      });
+    if(ws.readyState === ws.CLOSED){
+      ws.close();
     }
+    else {
+      ws.send(JSON.stringify({operationType: "unloadAll"}));
 
-    await Promise.all(promises);
-    console.debug("Missing consents have been inserted.");
-
-    consentsTable
-    // We're only interested in consents for the user
-      .filter({userId})
-      // And consents related to the current application
-      .filter(function(consent){
-        return r.expr(Object.keys(policies)).contains(consent("policyId"))
-      })
-      // Let's subscribe to the changes shall we?
-      .changes({squash: true, includeTypes: true, includeInitial: true})
-      .run(req._rdbConn, function(err, cursor) {
-        if (err) throw err;
-        console.debug("Starting to watch changes to consents for application %s and user %s", appId, userId);
-
-        cursor.each(function(err, row) {
-          if(err){throw err;}
-
-          // We received an update to the consent, need to join the data from the policies needed by the frontend with our consent object
-          let consent = row["new_val"];
-          let data = {
-            operationType: "update",
-            consent: Object.assign({}, policies[consent["policyId"]], consent)
-          };
-          ws.send(JSON.stringify(data));
-
-        }, function(){
-          console.debug("No longer following changes");
-          ws.close();
-          next();
+      console.debug("Calculating and inserting missing consents");
+      let promises = [];
+      for (let policyKey in policies) {
+        let policy = policies[policyKey];
+        await consentsTable.filter({userId})("policyId").coerceTo("array").contains(policy["id"]).not().run(req._rdbConn, function (err, result) {
+          if (err) {
+            console.error("Error un /follow: "+err);
+            ws.close();
+            //throw err;
+          }
+          if (result) {
+            console.debug("No consent generated for this policy, generating now.");
+            promises.push(consentsTable.insert({
+              userId,
+              policyId: policy["id"],
+              given: false,
+              date: Date.now()
+            }).run(req._rdbConn))
+          }
+          else {
+            console.debug("Consent already exists for this user and this policy.");
+          }
         });
-      })
+      }
+
+      await Promise.all(promises);
+      console.debug("Missing consents have been inserted.");
+
+
+      consentsTable
+      // We're only interested in consents for the user
+        .filter({userId})
+        // And consents related to the current application
+        .filter(function (consent) {
+          return r.expr(Object.keys(policies)).contains(consent("policyId"))
+        })
+        // Let's subscribe to the changes shall we?
+        .changes({squash: true, includeTypes: true, includeInitial: true})
+        .run(req._rdbConn, function (err, cursor) {
+          if (err) {
+            console.error("Error un /follow: "+err);
+            ws.close();
+          }
+          else {
+            console.debug("Starting to watch changes to consents for application %s and user %s", appId, userId);
+            cursors.push(cursor);
+
+            cursor.each(function (err, row) {
+              if (err) {
+                throw err;
+              }
+
+              // We received an update to the consent, need to join the data from the policies needed by the frontend with our consent object
+              let consent = row["new_val"];
+              let data = {
+                operationType: "update",
+                consent: Object.assign({}, policies[consent["policyId"]], consent)
+              };
+              if (ws.readyState === ws.CLOSED) {
+                ws.close();
+              }
+              else {
+                ws.send(JSON.stringify(data));
+              }
+            }, function () {
+              console.debug("No longer following changes");
+              ws.close();
+            });
+          }
+        })
+    }
   });
   myEmitter.emit("appChanged-"+appId);
 });
@@ -143,9 +193,7 @@ const server = app.listen(8081, async () => {
             }
             app["needed-policies"] = policiesObj;
             apps[app["id"]] = app;
-            console.log("Apps after change: "+JSON.stringify(apps));
             myEmitter.emit("appChanged-"+app["id"]);
-            console.log("Event sent");
           })
         });
       }, function(){
