@@ -25,10 +25,9 @@
     "eslint-plugin-node": "~6.0.1"
   },
   "dependencies": {
+    "body-parser": "latest",
     "express": "^4.16.3",
-    "express-ws": "^3.0.0",
-    "mongodb": "^3.0.5",
-    "rethinkdb": "^2.3.3",
-    "body-parser": "latest"
+    "node-rdkafka": "^2.3.1",
+    "rethinkdb": "^2.3.3"
   }
 }
