@@ -6,7 +6,7 @@ const bodyParser = require("body-parser");
 const Kafka = require("node-rdkafka");
 
 const producer = new Kafka.Producer({
-  "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "kafka:9092",
+  "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092",
   "api.version.request":false,
   "dr_cb": true
 });
@@ -31,6 +31,7 @@ app.use(bodyParser.json());
 
 app.use(createConnection);
 
+// TODO: check if still needed
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS");
@@ -252,34 +253,45 @@ watchUsers = async function(){
   console.debug("Starting to watch user changes...");
   let conn = await r.connect({"host": dbHost, "port": dbPort});
   let cursor = await dataSubjectsTable.changes({"includeInitial":true}).run(conn);
-  return cursor.each((err, row) => {
+  return cursor.each(async (err, row) => {
     if(err){console.error("Error occurred on user modification: %s", err);}
 
+    let policyIds = [];
+    if(row["old_val"]) {
+      policyIds = policyIds.concat(row["old_val"]["policies"]);
+    }
+    if(row["new_val"]) {
+      policyIds = policyIds.concat(row["new_val"]["policies"]);
+    }
+
+    let policies = {};
     try {
-      console.debug("Changes to user: %s", JSON.stringify(row));
+      let cursor = await dataControllerPoliciesTable.getAll(r.args(r.expr(policyIds).distinct())).run(conn);
+      let policiesArr = await cursor.toArray();
+      policiesArr.forEach(policy => {
+        return policies[policy["id"]] = policy;
+      });
+    }
+    catch(error){
+      console.error("Couldn't fetch policies: %s", error);
+    }
+
+    let withdrawn = [], added = [], newPolicies = null;
+    try {
       let userId;
       if(!row["new_val"]){
         userId = row["old_val"]["id"];
         // Remove policies from topic
         console.debug("User [%s] removed. ", userId);
 
-        // TODO: Send new message on kafka topic with userId as key and null as value, which shoud erase the info.
+        withdrawn = row["old_val"]["policies"];
 
-        producer.produce(
-          "sampleTopic",
-          null,
-          null,
-          userId,
-          Date.now()
-        );
+        newPolicies = null;
       }
       else{
         userId = row["new_val"]["id"];
-        let withdrawn = [], added = [];
 
         if(row["old_val"]){
-          // TODO: This is an update, need to mark which consents have been given or withdrawn then also generate a new full policy report.
-
           // Check and propagate withdrawals of consent to history kafka topic
           withdrawn = row["old_val"]["policies"].filter(item => {return !row["new_val"]["policies"].includes(item)});
           added = row["new_val"]["policies"].filter(item => {return !row["old_val"]["policies"].includes(item)});
@@ -289,34 +301,55 @@ watchUsers = async function(){
           added = row["new_val"]["policies"];
         }
 
-        for(let consent of withdrawn){
-          console.log("Removing user [%s] consent for policy [%s].", userId, consent);
-        }
-
-        for(let consent of added){
-          console.log("Adding user [%s] consent for policy [%s].", userId, consent);
-        }
-
         // Create new list of policies for user
-        console.debug("User policies modified, generating new set of policies.  ");
+        console.debug("User policies modified, generating new set of policies.  --%s", JSON.stringify(policies));
+
+        newPolicies = {
+          "simplePolicies": row["new_val"]["policies"].map(policy => {return policies[policy];})
+        };
+        console.log("newPolicies: %s", JSON.stringify(newPolicies));
       }
 
-      /*producer.produce(
-        // Topic to send the message to
-        "sampleTopic",
-        // optionally we can manually specify a partition for the message
-        // this defaults to -1 - which will use librdkafka"s default partitioner (consistent random for keyed messages, random for unkeyed messages)
-        null,
-        // Message to send. Must be a buffer
-        new Buffer("Awesome message"),
-        // for keyed messages, we also specify the key - note that this field is optional
-        "Stormwind",
-        // you can send a timestamp here. If your broker version supports it,
-        // it will get added. Otherwise, we default to 0
+      for(let consent of withdrawn){
+        console.log("Removing user [%s] consent for policy [%s].", userId, consent);
+        let message = policies[consent];
+        message["given"] = false;
+        message["data-subject"] = userId;
+        console.log("WITHDRAWN : %s", JSON.stringify(message));
+        producer.produce(
+          "changeLogs", // Topic
+          null, // Partition, null uses default
+          new Buffer(JSON.stringify(message)), // Message
+          null, // We do not need a key
+          Date.now()
+        );
+      }
+
+      for(let consent of added){
+        console.log("Adding user [%s] consent for policy [%s].", userId, consent);
+        let message = policies[consent];
+        message["given"] = true;
+        message["data-subject"] = userId;
+        console.log("ADDED : %s", JSON.stringify(message));
+        producer.produce(
+          "changeLogs", // Topic
+          null, // Partition, null uses default
+          new Buffer(JSON.stringify(message)), // Message
+          null, // We do not need a key
+          Date.now()
+        );
+      }
+
+
+      console.log("NEW POLICIES : %s", newPolicies ? JSON.stringify(newPolicies) : "null");
+      producer.produce(
+        "userPolicies", // Topic
+        null, // Partition, null uses default
+        newPolicies ? new Buffer(JSON.stringify(newPolicies)) : null, // Either null in case of removal or the new set of policies
+        userId, // To ensure we only keep the latest set of policies
         Date.now()
-        // you can send an opaque token here, which gets passed along
-        // to your delivery reports
-      );*/
+      );
+      
     } catch (err) {
       console.error("A problem occurred when sending our message");
       console.error(err);
@@ -351,83 +384,83 @@ generateData = async function(){
   promises.push(dataControllerPoliciesTable.insert([
     {
       "id": "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998",
-      "dataAtom": "Anonymized",
-      "locationAtom": "Europe",
-      "processAtom": "Collect",
-      "purposeAtom": "Account",
-      "recipientAtom": "Delivery"
+      "dataCollection": "Anonymized",
+      "locationCollection": "Europe",
+      "processCollection": "Collect",
+      "purposeCollection": "Account",
+      "recipientCollection": "Delivery"
     },
     {
       "id": "54ff9c00-1b47-4389-8390-870b2ee9a03c",
-      "dataAtom": "Derived",
-      "locationAtom": "EULike",
-      "processAtom": "Copy",
-      "purposeAtom": "Admin",
-      "recipientAtom": "Same"
+      "dataCollection": "Derived",
+      "locationCollection": "EULike",
+      "processCollection": "Copy",
+      "purposeCollection": "Admin",
+      "recipientCollection": "Same"
     },
     {
       "id": "d308b593-a2ad-4d9f-bcc3-ff47f4acfe5c",
-      "dataAtom": "Computer",
-      "locationAtom": "ThirdParty",
-      "processAtom": "Move",
-      "purposeAtom": "Browsing",
-      "recipientAtom": "Public"
+      "dataCollection": "Computer",
+      "locationCollection": "ThirdParty",
+      "processCollection": "Move",
+      "purposeCollection": "Browsing",
+      "recipientCollection": "Public"
     },
     {
       "id": "fcef1dbf-7b3d-4608-bebc-3f7ff6ae4f29",
-      "dataAtom": "Activity",
-      "locationAtom": "ControllerServers",
-      "processAtom": "Aggregate",
-      "purposeAtom": "Account",
-      "recipientAtom": "Delivery"
+      "dataCollection": "Activity",
+      "locationCollection": "ControllerServers",
+      "processCollection": "Aggregate",
+      "purposeCollection": "Account",
+      "recipientCollection": "Delivery"
     },
     {
       "id": "be155566-7b56-4265-92fe-cb474aa0ed42",
-      "dataAtom": "Anonymized",
-      "locationAtom": "EU",
-      "processAtom": "Analyze",
-      "purposeAtom": "Admin",
-      "recipientAtom": "Ours"
+      "dataCollection": "Anonymized",
+      "locationCollection": "EU",
+      "processCollection": "Analyze",
+      "purposeCollection": "Admin",
+      "recipientCollection": "Ours"
     },
     {
       "id": "8a7cf1f6-4c34-497f-8a65-4c985eb47a35",
-      "dataAtom": "AudiovisualActivity",
-      "locationAtom": "EULike",
-      "processAtom": "Anonymize",
-      "purposeAtom": "AnyContact",
-      "recipientAtom": "Public"
+      "dataCollection": "AudiovisualActivity",
+      "locationCollection": "EULike",
+      "processCollection": "Anonymize",
+      "purposeCollection": "AnyContact",
+      "recipientCollection": "Public"
     },
     {
       "id": "2f274ae6-6c2e-4350-9109-6c15e50ba670",
-      "dataAtom": "Computer",
-      "locationAtom": "ThirdCountries",
-      "processAtom": "Copy",
-      "purposeAtom": "Arts",
-      "recipientAtom": "Same"
+      "dataCollection": "Computer",
+      "locationCollection": "ThirdCountries",
+      "processCollection": "Copy",
+      "purposeCollection": "Arts",
+      "recipientCollection": "Same"
     },
     {
       "id": "5f8d8a7b-e250-41ca-b23e-efbfd2d83911",
-      "dataAtom": "Content",
-      "locationAtom": "OurServers",
-      "processAtom": "Derive",
-      "purposeAtom": "AuxPurpose",
-      "recipientAtom": "Unrelated"
+      "dataCollection": "Content",
+      "locationCollection": "OurServers",
+      "processCollection": "Derive",
+      "purposeCollection": "AuxPurpose",
+      "recipientCollection": "Unrelated"
     },
     {
       "id": "86371d81-30ff-49c4-897f-5e6dbc721e85",
-      "dataAtom": "Demographic",
-      "locationAtom": "ProcessorServers",
-      "processAtom": "Move",
-      "purposeAtom": "Browsing",
-      "recipientAtom": "Delivery"
+      "dataCollection": "Demographic",
+      "locationCollection": "ProcessorServers",
+      "processCollection": "Move",
+      "purposeCollection": "Browsing",
+      "recipientCollection": "Delivery"
     },
     {
       "id": "4d675233-279f-4b5e-8695-b0b66be4f0f9",
-      "dataAtom": "Derived",
-      "locationAtom": "ThirdParty",
-      "processAtom": "Aggregate",
-      "purposeAtom": "Charity",
-      "recipientAtom": "OtherRecipient"
+      "dataCollection": "Derived",
+      "locationCollection": "ThirdParty",
+      "processCollection": "Aggregate",
+      "purposeCollection": "Charity",
+      "recipientCollection": "OtherRecipient"
     }
   ], {conflict: "replace"}).run(conn));
 
