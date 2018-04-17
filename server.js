@@ -45,6 +45,205 @@ app.use((req, res, next) => {
   next();
 });
 
+// TODO: ADMIN
+// Get policies for an application
+app.get("/applications/:id/policies", (req, res, next) => {
+  let appId = req.params.id;
+  console.debug("Received request to get policies for application %s", appId);
+
+  if(!appId){
+    console.error("No appId specified, can't GET.");
+    res.status(400).send();
+    next();
+  }
+
+  dataControllerPoliciesTable.getAll(
+    r.args(applicationsTable.get(appId)("policies").default([]).coerceTo("array"))
+  ).run(req._rdbConn)
+    .then(cursor => {
+    return cursor.toArray();
+  }).then(policies => {
+      return res.status(200).json({policies});
+    })
+    .finally(() => {next();})
+    .error(handleError(res));
+});
+
+// TODO: ADMIN
+// Get application based on ID
+app.get("/applications/:id", (req, res, next) => {
+  let appId = req.params.id;
+  console.debug("Received request to get application %s", appId);
+
+  if(!appId){
+    console.error("No appId specified, can't GET.");
+    res.status(400).send();
+    next();
+  }
+
+  applicationsTable.get(appId).without({"policies": true}).run(req._rdbConn)
+    .then(application => {
+      application["links"] = {
+        "policies": "/applications/"+application["id"]+"/policies"
+      };
+      return res.status(200).json({"applications": [application]});
+    })
+    .finally(() => {next();})
+    .error(handleError(res));
+});
+
+app.put("/applications/:id", (req, res, next) => {
+  let appId = req.params.id;
+  if (!appId) {
+    console.error("No id specified, can't update.");
+    res.status(400).send();
+    next();
+  }
+  console.debug("Received request to update application: %s", appId);
+
+  let application = req.body.application;
+  application["id"] = appId;
+
+  applicationsTable.get(appId).update(application).run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Application [%s] updated: %s", appId, JSON.stringify(updateResult));
+      delete application["policies"];
+      application["links"] = {
+        "policies": "/applications/"+appId+"/policies"
+      };
+      return res.status(200).json(application);
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
+
+app.delete("/applications/:id", (req, res, next) => {
+  let appId = req.params.id;
+  if (!appId) {
+    console.error("No id specified, can't delete.");
+    res.status(400).send();
+    next();
+  }
+  console.debug("Received request to delete application: %s", appId);
+
+  applicationsTable.get(appId).delete().run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Application [%s] deleted: %s", appId, JSON.stringify(updateResult));
+      return res.status(204).send();
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
+
+// TODO: ADMIN
+// Get all applications
+app.get("/applications", (req, res, next) => {
+  console.debug("Received request to get applications");
+
+  applicationsTable.without({"policies": true}).run(req._rdbConn)
+    .then(cursor => {
+      return cursor.toArray();
+    })
+    .then(applications => {
+      applications = applications.map(application => {
+        application["links"] = {
+          "policies": "/applications/"+application["id"]+"/policies"
+        };
+        return application;
+      });
+      res.status(200).send({applications})
+    })
+    .finally(() => {next();})
+    .error(handleError(res));
+});
+
+app.post("/applications", (req, res, next) => {
+  console.debug("Received request to POST new application");
+
+  let application = req.body.application;
+
+  applicationsTable.insert(application, {"return_changes": true}).run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Application inserted: %s", JSON.stringify(updateResult));
+      let application = updateResult.changes[0]["new_val"];
+      delete application["policies"];
+      application["links"] = {
+        "policies": "/applications/"+application["id"]+"/policies"
+      };
+      return res.status(200).json({"application": application});
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
+
+app.get("/policies/:id", (req, res, next) => {
+  let policyId = req.params.id;
+  console.debug("Received request to get policy: %s", policyId);
+
+  if(!policyId){
+    console.error("No id specified, can't GET.");
+    res.status(400).send();
+    next();
+  }
+
+  dataControllerPoliciesTable.get(policyId).run(req._rdbConn)
+    .then(policy => {
+      return res.status(200).json({"policies": [policy]});
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
+
+app.put("/policies/:id", (req, res, next) => {
+  let policyId = req.params.id;
+  if (!policyId) {
+    console.error("No id specified, can't update.");
+    res.status(400).send();
+    next();
+  }
+  console.debug("Received request to update policy: %s", policyId);
+
+  let policy = req.body.policy;
+  policy["id"] = policyId;
+
+  dataControllerPoliciesTable.get(policyId).update(policy).run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Policy [%s] updated: %s", policyId, JSON.stringify(updateResult));
+      return res.status(200).json(policy);
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
+
+app.delete("/policies/:id", (req, res, next) => {
+  let policyId = req.params.id;
+  if (!policyId) {
+    console.error("No id specified, can't delete.");
+    res.status(400).send();
+    next();
+  }
+  console.debug("Received request to delete policy: %s", policyId);
+
+  dataControllerPoliciesTable.get(policyId).delete().run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Policy [%s] deleted: %s", policyId, JSON.stringify(updateResult));
+      return res.status(204).send();
+    })
+    .finally(() => {
+      next();
+    })
+    .error(handleError(res));
+});
 
 // Get policies for an application
 app.get("/policies", (req, res, next) => {
@@ -55,74 +254,89 @@ app.get("/policies", (req, res, next) => {
 
   // If an APP_KEY is specified, we get the policies for that application only.
   if(appId){
-    query = query.filter(policy => {return r.expr(applicationsTable.get(appId)("needed-policies")).contains(policy("id"))})
+    query = query.filter(policy => {return r.expr(applicationsTable.get(appId)("policies")).contains(policy("id"))})
+  }
+  else {
+    // TODO: ADMIN, otherwise error
   }
   query
     .map(row => {return row.merge({"type": "policy"})})
     .orderBy("id")
     .run(req._rdbConn)
     .then(cursor => {
-      cursor.toArray()
-        .then(policies=> {
-          res.status(200).json({"policies": policies});
-        })
-        .error(error => {
-          res.status(500).send(error);
-        })
-        .finally(() => {next();})
+      return cursor.toArray()
+    })
+    .then(policies=> {
+      return res.status(200).json({"policies": policies});
+    })
+    .finally(() => {next();})
+    .error(handleError(res));
+});
+
+app.post("/policies", (req, res, next) => {
+  console.debug("Received request to POST new policy");
+
+  let policy = req.body.policy;
+
+  dataControllerPoliciesTable.insert(policy, {"return_changes": true}).run(req._rdbConn)
+    .then(updateResult=> {
+      console.debug("Policy inserted: %s", JSON.stringify(updateResult));
+      return res.status(200).json({"policy": updateResult.changes[0]["new_val"]});
+    })
+    .finally(() => {
+      next();
     })
     .error(handleError(res));
 });
 
-// Get policies linked to specified user
+// Get policies linked to specified data subject
 app.get("/users/:id/policies", (req, res, next) => {
-
-  let userId = req.params.id;
-  if(!userId){
-    console.error("No userId specified, can't update.");
+  let dataSubjectId = req.params.id;
+  if(!dataSubjectId){
+    console.error("No dataSubjectId specified, can't update.");
     res.status(400).send();
     next();
   }
-  console.debug("Received request to get policies for user: %s", userId);
+  console.debug("Received request to get policies for data subject: %s", dataSubjectId);
 
   let appId = req.header("APP_KEY");
 
-  let query = dataControllerPoliciesTable.getAll(r.args(dataSubjectsTable.get(userId)("policies").coerceTo("array")));
+  let query = dataControllerPoliciesTable.getAll(r.args(dataSubjectsTable.get(dataSubjectId)("policies").coerceTo("array")));
 
   // If an APP_KEY is specified, we get the policies for that application only.
   if(appId){
-    query = query.filter(policy => {return r.expr(applicationsTable.get(appId)("needed-policies")).contains(policy("id"))})
+    query = query.filter(policy => {return r.expr(applicationsTable.get(appId)("policies")).contains(policy("id"))})
   }
   query
-    .map(row => {return row.merge({"userId": userId, "type": "policy"})})
+    .map(row => {return row.merge({"dataSubjectId": dataSubjectId, "type": "policy"})})
     .orderBy("id")
     .run(req._rdbConn)
     .then(cursor => {
-      cursor.toArray()
-        .then(policies=> {
-          res.status(200).json({"policies": policies});
-        })
-        .error(handleError(res))
-        .finally(() => {next();})
+      return cursor.toArray();
     })
+    .then(policies=> {
+      return res.status(200).json({"policies": policies});
+    })
+    .finally(() => {next();})
     .error(handleError(res));
 });
 
 app.get("/users/:id", (req, res, next) => {
 
-  let userId = req.params.id;
-  if(!userId){
-    console.error("No userId specified, can't update.");
+  let dataSubjectId = req.params.id;
+  if(!dataSubjectId){
+    console.error("No dataSubjectId specified, can't update.");
     res.status(400).send();
     next();
   }
-  console.debug("Received request to get user: %s", userId);
+  console.debug("Received request to get data subject: %s", dataSubjectId);
 
-  dataSubjectsTable.get(userId).without({"policies": true}).run(req._rdbConn).then(user => {
-    user["links"] = {
-      "policies": "/users/"+userId+"/policies"
+  dataSubjectsTable.get(dataSubjectId).without({"policies": true}).run(req._rdbConn)
+    .then(dataSubject => {
+    dataSubject["links"] = {
+      "policies": "/users/"+dataSubject["id"]+"/policies"
     };
-    res.status(200).json({users: [user]});
+    res.status(200).json({"users": [dataSubject]});
   })
     .error(handleError(res))
     .finally(() => {
@@ -131,16 +345,16 @@ app.get("/users/:id", (req, res, next) => {
 });
 
 app.put("/users/:id", (req, res, next) => {
-  let userId = req.params.id;
-  if(!userId){
-    console.error("No userId specified, can't update.");
+  let dataSubjectId = req.params.id;
+  if(!dataSubjectId){
+    console.error("No dataSubjectId specified, can't update.");
     res.status(400).send();
     next();
   }
-  console.debug("Received request to update user: %s", userId);
+  console.debug("Received request to update data subject: %s", dataSubjectId);
 
   let appId = req.header("APP_KEY");
-  let user = req.body.user;
+  let dataSubject = req.body.user;
 
   let query = applicationsTable;
   let dbUser = null;
@@ -150,14 +364,14 @@ app.put("/users/:id", (req, res, next) => {
     query = query.get(appId);
   }
   query
-    ("needed-policies")
+    ("policies")
     .coerceTo("array")
     .run(req._rdbConn)
     .then(cursor => {
       return cursor.toArray();
     })
     .then(appPolicies => {
-      return dataSubjectsTable.get(userId).run(req._rdbConn).then(dbUser => {
+      return dataSubjectsTable.get(dataSubjectId).run(req._rdbConn).then(dbUser => {
         return {
           appPolicies, dbUser
         };
@@ -168,7 +382,7 @@ app.put("/users/:id", (req, res, next) => {
 
       let dbPolicies = dbUser["policies"];
       let appPolicies = hash["appPolicies"];
-      let newPolicies = user["policies"];
+      let newPolicies = dataSubject["policies"];
 
 
       for(let appPolicy of appPolicies){
@@ -177,11 +391,13 @@ app.put("/users/:id", (req, res, next) => {
         }
       }
       for(let newPolicy of newPolicies){
-        dbPolicies.push(newPolicy);
+        if(appPolicies.includes(newPolicy)){
+          dbPolicies.push(newPolicy);
+        }
       }
 
-      return dataSubjectsTable.get(userId).update(dbUser).run(req._rdbConn).then(updateResult => {
-        console.debug("User [%s] updated: ", userId, updateResult);
+      return dataSubjectsTable.get(dataSubjectId).update(dbUser).run(req._rdbConn).then(updateResult => {
+        console.debug("User [%s] updated: %s", dataSubjectId, JSON.stringify(updateResult));
         dbUser["policies"] = newPolicies;
         return dbUser;
       });
@@ -210,7 +426,8 @@ const server = app.listen(8081, async () => {
   });
 
   producer.on("ready", async function() {
-    await watchUsers();
+    await watchDataSubjects();
+    await watchPolicies();
   });
   console.debug("App listening at http://%s:%s", address, port);
 });
@@ -249,12 +466,25 @@ function gracefulShutdown () {
   })
 }
 
-watchUsers = async function(){
-  console.debug("Starting to watch user changes...");
+watchPolicies = async function(){
+  console.debug("Starting to watch policies changes...");
+  let conn = await r.connect({"host": dbHost, "port": dbPort});
+  let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn);
+  return cursor.each(async (err, row) => {
+    if(row["type"] === "remove"){
+      // TODO: Remove that ID from applications and data subjects
+    }
+  },() =>{
+    return conn.close();
+  })
+};
+
+watchDataSubjects = async function(){
+  console.debug("Starting to watch data subject changes...");
   let conn = await r.connect({"host": dbHost, "port": dbPort});
   let cursor = await dataSubjectsTable.changes({"includeInitial":true}).run(conn);
   return cursor.each(async (err, row) => {
-    if(err){console.error("Error occurred on user modification: %s", err);}
+    if(err){console.error("Error occurred on data subject modification: %s", err);}
 
     let policyIds = [];
     if(row["old_val"]) {
@@ -278,18 +508,18 @@ watchUsers = async function(){
 
     let withdrawn = [], added = [], newPolicies = null;
     try {
-      let userId;
+      let dataSubjectId;
       if(!row["new_val"]){
-        userId = row["old_val"]["id"];
+        dataSubjectId = row["old_val"]["id"];
         // Remove policies from topic
-        console.debug("User [%s] removed. ", userId);
+        console.debug("User [%s] removed. ", dataSubjectId);
 
         withdrawn = row["old_val"]["policies"];
 
         newPolicies = null;
       }
       else{
-        userId = row["new_val"]["id"];
+        dataSubjectId = row["new_val"]["id"];
 
         if(row["old_val"]){
           // Check and propagate withdrawals of consent to history kafka topic
@@ -297,12 +527,12 @@ watchUsers = async function(){
           added = row["new_val"]["policies"].filter(item => {return !row["old_val"]["policies"].includes(item)});
         }
         else {
-          // New user
+          // New data subject
           added = row["new_val"]["policies"];
         }
 
-        // Create new list of policies for user
-        console.debug("User policies modified, generating new set of policies.  --%s", JSON.stringify(policies));
+        // Create new list of policies for data subject
+        console.debug("Data subject policies modified, generating new set of policies.  --%s", JSON.stringify(policies));
 
         newPolicies = {
           "simplePolicies": row["new_val"]["policies"].map(policy => {return policies[policy];})
@@ -311,10 +541,10 @@ watchUsers = async function(){
       }
 
       for(let consent of withdrawn){
-        console.log("Removing user [%s] consent for policy [%s].", userId, consent);
+        console.log("Removing data subject [%s] consent for policy [%s].", dataSubjectId, consent);
         let message = policies[consent];
         message["given"] = false;
-        message["data-subject"] = userId;
+        message["data-subject"] = dataSubjectId;
         console.log("WITHDRAWN : %s", JSON.stringify(message));
         producer.produce(
           "changeLogs", // Topic
@@ -326,10 +556,10 @@ watchUsers = async function(){
       }
 
       for(let consent of added){
-        console.log("Adding user [%s] consent for policy [%s].", userId, consent);
+        console.log("Adding data subject [%s] consent for policy [%s].", dataSubjectId, consent);
         let message = policies[consent];
         message["given"] = true;
-        message["data-subject"] = userId;
+        message["data-subject"] = dataSubjectId;
         console.log("ADDED : %s", JSON.stringify(message));
         producer.produce(
           "changeLogs", // Topic
@@ -343,13 +573,13 @@ watchUsers = async function(){
 
       console.log("NEW POLICIES : %s", newPolicies ? JSON.stringify(newPolicies) : "null");
       producer.produce(
-        "userPolicies", // Topic
+        "dataSubjectPolicies", // Topic
         null, // Partition, null uses default
         newPolicies ? new Buffer(JSON.stringify(newPolicies)) : null, // Either null in case of removal or the new set of policies
-        userId, // To ensure we only keep the latest set of policies
+        dataSubjectId, // To ensure we only keep the latest set of policies
         Date.now()
       );
-      
+
     } catch (err) {
       console.error("A problem occurred when sending our message");
       console.error(err);
@@ -384,83 +614,83 @@ generateData = async function(){
   promises.push(dataControllerPoliciesTable.insert([
     {
       "id": "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998",
-      "dataCollection": "Anonymized",
-      "locationCollection": "Europe",
-      "processCollection": "Collect",
-      "purposeCollection": "Account",
-      "recipientCollection": "Delivery"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Anonymized",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EU",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Collect",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Account",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
     },
     {
       "id": "54ff9c00-1b47-4389-8390-870b2ee9a03c",
-      "dataCollection": "Derived",
-      "locationCollection": "EULike",
-      "processCollection": "Copy",
-      "purposeCollection": "Admin",
-      "recipientCollection": "Same"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Derived",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EULike",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Copy",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Admin",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same"
     },
     {
       "id": "d308b593-a2ad-4d9f-bcc3-ff47f4acfe5c",
-      "dataCollection": "Computer",
-      "locationCollection": "ThirdParty",
-      "processCollection": "Move",
-      "purposeCollection": "Browsing",
-      "recipientCollection": "Public"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Computer",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdParty",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Move",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Browsing",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public"
     },
     {
       "id": "fcef1dbf-7b3d-4608-bebc-3f7ff6ae4f29",
-      "dataCollection": "Activity",
-      "locationCollection": "ControllerServers",
-      "processCollection": "Aggregate",
-      "purposeCollection": "Account",
-      "recipientCollection": "Delivery"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Activity",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ControllerServers",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Aggregate",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Account",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
     },
     {
       "id": "be155566-7b56-4265-92fe-cb474aa0ed42",
-      "dataCollection": "Anonymized",
-      "locationCollection": "EU",
-      "processCollection": "Analyze",
-      "purposeCollection": "Admin",
-      "recipientCollection": "Ours"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Anonymized",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EU",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Analyze",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Admin",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Ours"
     },
     {
       "id": "8a7cf1f6-4c34-497f-8a65-4c985eb47a35",
-      "dataCollection": "AudiovisualActivity",
-      "locationCollection": "EULike",
-      "processCollection": "Anonymize",
-      "purposeCollection": "AnyContact",
-      "recipientCollection": "Public"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#AudiovisualActivity",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EULike",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Anonymize",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#AnyContact",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public"
     },
     {
       "id": "2f274ae6-6c2e-4350-9109-6c15e50ba670",
-      "dataCollection": "Computer",
-      "locationCollection": "ThirdCountries",
-      "processCollection": "Copy",
-      "purposeCollection": "Arts",
-      "recipientCollection": "Same"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Computer",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdCountries",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Copy",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Arts",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same"
     },
     {
       "id": "5f8d8a7b-e250-41ca-b23e-efbfd2d83911",
-      "dataCollection": "Content",
-      "locationCollection": "OurServers",
-      "processCollection": "Derive",
-      "purposeCollection": "AuxPurpose",
-      "recipientCollection": "Unrelated"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Content",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#OurServers",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Derive",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#AuxPurpose",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Unrelated"
     },
     {
       "id": "86371d81-30ff-49c4-897f-5e6dbc721e85",
-      "dataCollection": "Demographic",
-      "locationCollection": "ProcessorServers",
-      "processCollection": "Move",
-      "purposeCollection": "Browsing",
-      "recipientCollection": "Delivery"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Demographic",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ProcessorServers",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Move",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Browsing",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
     },
     {
       "id": "4d675233-279f-4b5e-8695-b0b66be4f0f9",
-      "dataCollection": "Derived",
-      "locationCollection": "ThirdParty",
-      "processCollection": "Aggregate",
-      "purposeCollection": "Charity",
-      "recipientCollection": "OtherRecipient"
+      "dataCollection": "http://www.specialprivacy.eu/vocabs/data#Derived",
+      "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdParty",
+      "processCollection": "http://www.specialprivacy.eu/vocabs/data#Aggregate",
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Charity",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#OtherRecipient"
     }
   ], {conflict: "replace"}).run(conn));
 
@@ -468,7 +698,7 @@ generateData = async function(){
     {
       "id": "d5aca7a6-ed5f-411c-b927-6f19c36b93c3",
       "name": "Super application",
-      "needed-policies":
+      "policies":
         [
           "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998",
           "54ff9c00-1b47-4389-8390-870b2ee9a03c",
@@ -481,7 +711,7 @@ generateData = async function(){
     {
       "id": "c52dcc17-89f7-4a56-8836-bad27fd15bb3",
       "name": "Super duper application",
-      "needed-policies":
+      "policies":
         [
           "be155566-7b56-4265-92fe-cb474aa0ed42",
           "8a7cf1f6-4c34-497f-8a65-4c985eb47a35",
