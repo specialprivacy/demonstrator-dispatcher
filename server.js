@@ -168,7 +168,11 @@ async function watchDataSubjects () {
       console.debug("Data subject policies modified, generating new set of policies.")
 
       newPolicies = {
-        "simplePolicies": row["new_val"]["policies"].map(policy => { return policies[policy] })
+        "simplePolicies": row["new_val"]["policies"].map(policy => {
+          let simplePolicy = Object.assign({}, policies[policy]);
+          delete simplePolicy["explanation"]
+          return simplePolicy
+        })
       }
     }
 
@@ -255,7 +259,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EU",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Collect",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Account",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery",
+      "explanation": "I consent to the collection of my anonymized data in Europe for the purpose of accounting."
     },
     {
       "id": "54ff9c00-1b47-4389-8390-870b2ee9a03c",
@@ -263,7 +268,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EULike",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Copy",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Admin",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same",
+      "explanation": "I consent to the copying of my derived data in Europe-like countries for the purpose of administration."
     },
     {
       "id": "d308b593-a2ad-4d9f-bcc3-ff47f4acfe5c",
@@ -271,7 +277,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdParty",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Move",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Browsing",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public",
+      "explanation": "I consent to the moving of my computer data on third-party servers for the purpose of browsing."
     },
     {
       "id": "fcef1dbf-7b3d-4608-bebc-3f7ff6ae4f29",
@@ -279,7 +286,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ControllerServers",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Aggregate",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Account",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery",
+      "explanation": "I consent to the aggregation of my activity data on your servers for the purpose of accounting."
     },
     {
       "id": "be155566-7b56-4265-92fe-cb474aa0ed42",
@@ -287,15 +295,17 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EU",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Analyze",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Admin",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Ours"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Ours",
+      "explanation": "I consent to the analysis of my anonymized data in Europe for the purpose of administration."
     },
     {
       "id": "8a7cf1f6-4c34-497f-8a65-4c985eb47a35",
       "dataCollection": "http://www.specialprivacy.eu/vocabs/data#AudiovisualActivity",
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#EULike",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Anonymize",
-      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#AnyContact",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public"
+      "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Admin",
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Public",
+      "explanation": "I consent to the anonymization of my activity data in Europe-like countries for the purpose of administration."
     },
     {
       "id": "2f274ae6-6c2e-4350-9109-6c15e50ba670",
@@ -303,7 +313,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdCountries",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Copy",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Arts",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Same",
+      "explanation": "I consent to the copying of my computer data in third countries for the purpose of artistic usage."
     },
     {
       "id": "5f8d8a7b-e250-41ca-b23e-efbfd2d83911",
@@ -311,7 +322,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#OurServers",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Derive",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#AuxPurpose",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Unrelated"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Unrelated",
+      "explanation": "I consent to the derivation of my content data on your servers for auxiliary purposes."
     },
     {
       "id": "86371d81-30ff-49c4-897f-5e6dbc721e85",
@@ -319,7 +331,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ProcessorServers",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Move",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Browsing",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#Delivery",
+      "explanation": "I consent to the moving of my demographic data on processor servers for the purpose of browsing."
     },
     {
       "id": "4d675233-279f-4b5e-8695-b0b66be4f0f9",
@@ -327,7 +340,8 @@ async function generateData () {
       "locationCollection": "http://www.specialprivacy.eu/vocabs/data#ThirdParty",
       "processCollection": "http://www.specialprivacy.eu/vocabs/data#Aggregate",
       "purposeCollection": "http://www.specialprivacy.eu/vocabs/data#Charity",
-      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#OtherRecipient"
+      "recipientCollection": "http://www.specialprivacy.eu/vocabs/data#OtherRecipient",
+      "explanation": "I consent to the aggregation of my derived data on third-party servers for the purpose of charity."
     }
   ], {conflict: "replace"}).run(conn))
 
