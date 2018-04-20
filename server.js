@@ -32,8 +32,9 @@ const {
   dbTables
 } = rethink
 
-app.use(bodyParser.json())
+app.disable("x-powered-by")
 
+app.use(bodyParser.json())
 app.use(createConnection)
 
 // TODO: check if still needed
