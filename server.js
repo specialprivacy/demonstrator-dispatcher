@@ -16,8 +16,8 @@ const producer = new Kafka.Producer({
   "api.version.request": false
 })
 
-const changeLogsTopic = "changeLogs"
-const fullPolicyTopic = "fullPolicies"
+const changeLogsTopic = process.env["CHANGE_LOGS_TOPIC"] || "policies-audit"
+const fullPolicyTopic = process.env["FULL_POLICIES_TOPIC"] || "full-policies"
 
 const rethink = require("./utils/rethinkdb_config")
 const {
@@ -135,6 +135,7 @@ async function watchDataSubjects () {
       let policiesArr = await cursor.toArray()
       policiesArr.forEach(policy => {
         policies[policy["id"]] = policy
+        delete policy["id"]
       })
     } catch (error) {
       console.error("Couldn't fetch policies: %s", error)
@@ -190,7 +191,7 @@ async function watchDataSubjects () {
 
     for (let consent of added) {
       console.debug("Adding data subject [%s] consent for policy [%s].", dataSubjectId, consent)
-      let message = policies[consent]
+      let message = Object.assign({}, policies[consent])
       message["given"] = true
       message["data-subject"] = dataSubjectId
 
