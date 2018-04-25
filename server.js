@@ -30,7 +30,7 @@ const {
   dataControllerPoliciesTable,
   dataSubjectsTable,
   dbTables
-} = rethink
+  } = rethink
 
 app.disable("x-powered-by")
 
@@ -41,7 +41,7 @@ app.use(createConnection)
 app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*")
   res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With, APP_KEY")
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With, Application-Id")
 
   // intercepts OPTIONS method
   if (req.method === "OPTIONS") {
@@ -204,6 +204,7 @@ async function watchDataSubjects () {
 
     for (let message of messages) {
       try {
+        console.debug("\nProducing on topic [%s] : %s\n", changeLogsTopic, JSON.stringify(message))
         producer.produce(
           changeLogsTopic, // Topic
           null, // Partition, null uses default
@@ -217,6 +218,7 @@ async function watchDataSubjects () {
     }
 
     try {
+      console.debug("\nProducing on topic [%s] : %s\n", fullPolicyTopic, JSON.stringify(newPolicies))
       producer.produce(
         fullPolicyTopic, // Topic
         null, // Partition, null uses default
@@ -391,38 +393,26 @@ async function generateData () {
     }
   ], {conflict: "replace"}).run(conn))
 
-  await Promise.all(promises)
-  console.debug("Data inserted")
+  return Promise.all(promises).then(resolved => {
+    console.debug("Data inserted")
 
-  return conn.close()
+    return conn.close()
+  })
 }
 
 let server = null
 async function init () {
-  // Switch check when Kafka can be used reliably along the service
-  if (process.env["ENSURE_KAFKA_RUNNING"]) {
-    producer.connect()
-    producer.on("connection.failure", function (err) {
-      console.error("Could not connect to Kafka, exiting: %s", err)
-      process.exit(-1)
-    })
-    producer.on("event.error", function (err) {
-      console.error("Error from kafka producer: %s", err)
-    })
-    producer.on("ready", async () => {
-      // Here we start the triggers on data subjects & policies changes
-      await generateData()
-      watchDataSubjects()
-      watchPolicies()
-
-      server = app.listen(8081, () => {
-        const { address } = server.address()
-        const { port } = server.address()
-        console.debug("App listening at http://%s:%s", address, port)
-      })
-    })
-  } else {
-    await generateData()
+  await generateData()
+  producer.connect({"timeout": 30000})
+  producer.on("connection.failure", function (err) {
+    console.error("Could not connect to Kafka, exiting: %s", err)
+    process.exit(-1)
+  })
+  producer.on("event.error", function (err) {
+    console.error("Error from kafka producer: %s", err)
+  })
+  producer.on("ready", async () => {
+    // Here we start the triggers on data subjects & policies changes
     watchDataSubjects()
     watchPolicies()
 
@@ -431,7 +421,7 @@ async function init () {
       const { port } = server.address()
       console.debug("App listening at http://%s:%s", address, port)
     })
-  }
+  })
 }
 
 init()
