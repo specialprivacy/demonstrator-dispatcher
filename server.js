@@ -169,7 +169,7 @@ async function watchDataSubjects () {
 
       newPolicies = {
         "simplePolicies": row["new_val"]["policies"].map(policy => {
-          let simplePolicy = Object.assign({}, policies[policy]);
+          let simplePolicy = Object.assign({}, policies[policy])
           delete simplePolicy["explanation"]
           return simplePolicy
         })
