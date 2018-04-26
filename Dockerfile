@@ -11,6 +11,7 @@ EXPOSE 80
 ARG NODE_ENV=development
 CMD ["node", "server.js"]
 
+COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/node_modules /app/node_modules
 
 COPY utils /app/utils
