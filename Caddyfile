@@ -11,6 +11,9 @@ errors stderr
 # Configure letsencrypt
 tls {$EMAIL}
 
+# Serve a landingpage
+root /landingpage
+
 # Push-tester proxy
 proxy /sse-proxy {$SSE_PROXY} {
   without /sse-proxy
@@ -57,14 +60,6 @@ proxy /policy-crud {$POLICY_CRUD_UI} {
 
 # Keycloak
 proxy /auth {$KEYCLOAK} {
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
-
-# Serve leftovers from frontend webserver
-# TODO: serve a landingpage from here
-proxy / {$FRONTEND} {
   transparent
   header_upstream x-request-id {request_id}
 }
