@@ -1,19 +1,23 @@
-FROM node:carbon
+FROM node:8-alpine as builder
+WORKDIR /app
 
-# Create app directory
-WORKDIR /usr/src/app
-
-# Install app dependencies
-# A wildcard is used to ensure both package.json AND package-lock.json are copied
-# where available (npm@5+)
-COPY package*.json ./
-
+RUN apk add --update build-base python bash
+COPY package.json /app/package.json
 RUN npm install
-# If you are building your code for production
-# RUN npm install --only=production
 
-# Bundle app source
-COPY . .
+FROM node:8-alpine
 
-EXPOSE 8081
-CMD [ "npm", "start" ]
+WORKDIR /app
+EXPOSE 80
+ARG NODE_ENV=development
+CMD ["node", "server.js"]
+
+COPY --from=builder /app/package.json /app/package.json
+COPY --from=builder /app/node_modules /app/node_modules
+
+COPY utils /app/utils
+COPY server.js /app/server.js
+COPY lib /app/lib
+COPY test /app/test
+
+RUN if [ ${NODE_ENV} == "production" ]; then rm -rf /app/test; fi

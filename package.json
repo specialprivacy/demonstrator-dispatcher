@@ -1,21 +1,30 @@
 {
-  "name": "change-logs-producer",
+  "name": "consent-management-backend",
   "version": "0.0.1",
   "description": "Produces events on a kafka stream when an user signals a change to his consents",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "./node_modules/.bin/eslint ./",
     "start": "node server.js"
   },
   "repository": {
     "type": "git",
-    "url": "https://git.tenforce.com/special/change-logs-producer"
+    "url": "https://git.tenforce.com/special/consent-management-backend.git"
   },
   "keywords": [
     "nodejs"
   ],
   "author": "Arnaud S'Jongers",
   "license": "ISC",
+  "eslintConfig": {
+    "extends": "standard",
+    "rules": {
+      "quotes": [
+        "error",
+        "double"
+      ]
+    }
+  },
   "devDependencies": {
     "eslint": "~4.18.1",
     "eslint-config-standard": "~11.0.0",
