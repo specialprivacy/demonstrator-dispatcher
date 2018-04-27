@@ -1,4 +1,4 @@
-:80
+{$DOMAIN}
 
 # Fetch the request-id or get a new one
 request_id x-request-id
@@ -7,6 +7,9 @@ header / x-request-id {request_id}
 # Make the logs docker friendly and inject the request-id
 log / stdout "{request_id} - {common}"
 errors stderr
+
+# Configure letsencrypt
+tls {$EMAIL}
 
 # Push-tester proxy
 proxy /sse-proxy {$SSE_PROXY} {
@@ -31,13 +34,36 @@ proxy /consent-manager {$CONSENT_MANAGEMENT_BACKEND} {
   header_upstream x-request-id {request_id}
 }
 
+# Transparency UI
+proxy /transparency {$TRANSPARENCY_UI} {
+  without /transparency
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
+# Consent UI
+proxy /consent {$CONSENT_UI} {
+  without /consent
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
+# Policy CRUD UI
+proxy /policy-crud {$POLICY_CRUD_UI} {
+  without /policy-crud
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
 # Keycloak
 proxy /auth {$KEYCLOAK} {
   transparent
   header_upstream x-request-id {request_id}
 }
 
+
 # Serve leftovers from frontend webserver
+# TODO: serve a landingpage from here
 proxy / {$FRONTEND} {
   transparent
   header_upstream x-request-id {request_id}
