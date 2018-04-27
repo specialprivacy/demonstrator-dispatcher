@@ -15,8 +15,23 @@ proxy /sse-proxy {$SSE_PROXY} {
   header_upstream connection ""
 }
 
-# Keycloak proxy
-proxy /auth {$KEYCLOAK_PROXY} {
+# Consent Management Backend
+rewrite {
+  if_op or
+  if {path} starts_with /users
+  if {path} starts_with /applications
+  if {path} starts_with /policies
+  to /consent-manager{uri}
+}
+
+proxy /consent-manager {$CONSENT_MANAGEMENT_BACKEND} {
+  without /consent-manager
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
+# Keycloak
+proxy /auth {$KEYCLOAK} {
   transparent
   header_upstream x-request-id {request_id}
 }
