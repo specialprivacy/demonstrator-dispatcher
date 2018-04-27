@@ -14,6 +14,8 @@ ENV SSE_PROXY=http://sse-proxy
 ENV KEYCLOAK=http://keycloak:8080
 ENV CONSENT_MANAGEMENT_BACKEND=http://consent-management-backend:8081
 
+RUN apk --update add ca-certificates
+
 COPY landingpage /landingpage
 COPY Caddyfile /config/Caddyfile
 
