@@ -10,6 +10,7 @@ errors stderr
 
 # Push-tester proxy
 proxy /sse-proxy {$SSE_PROXY} {
+  without /sse-proxy
   transparent
   header_upstream x-request-id {request_id}
   header_upstream connection ""
