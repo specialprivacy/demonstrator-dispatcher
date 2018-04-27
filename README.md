@@ -29,3 +29,4 @@ TODO: Add build instructions for local and docker based development
 * Add support for kafka SSL
 * Add support for kafka access management
 * Restructure API
+* Reuse database connections (typically expensive to create, current behaviour will cause problems under load)

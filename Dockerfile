@@ -1,6 +1,7 @@
-FROM node:8 as builder
+FROM node:8-alpine as builder
 WORKDIR /app
 
+RUN apk add --update build-base python bash
 COPY package.json /app/package.json
 RUN npm install
 

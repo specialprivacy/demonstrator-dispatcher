@@ -403,13 +403,15 @@ async function init () {
   if (process.env["ENSURE_KAFKA_RUNNING"]) {
     producer.connect()
     producer.on("connection.failure", function (err) {
-      console.error("Could not connect to Kafka, exiting: %s", err)
+      console.error("Could not connect to Kafka, exiting")
+      console.error(err)
       process.exit(-1)
     })
     producer.on("event.error", function (err) {
-      console.error("Error from kafka producer: %s", err)
+      console.error("Error from kafka produce")
+      console.error(err)
     })
-    producer.on("ready", async () => {
+    producer.on("ready", async function () {
       // Here we start the triggers on data subjects & policies changes
       await generateData()
       watchDataSubjects()
