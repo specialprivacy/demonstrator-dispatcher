@@ -12,9 +12,11 @@ const dataSubjects = require("./lib/data-subjects")
 const policies = require("./lib/policies")
 
 const producer = new Kafka.Producer({
-  "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092",
+  "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092, localhost:9094",
   "api.version.request": false
 })
+
+
 
 const changeLogsTopic = process.env["CHANGE_LOGS_TOPIC"] || "policies-audit"
 const fullPolicyTopic = process.env["FULL_POLICIES_TOPIC"] || "full-policies"
@@ -34,8 +36,85 @@ const {
 
 app.disable("x-powered-by")
 
-app.use(bodyParser.json())
-app.use(createConnection)
+var request = require('request-promise');
+require('request-debug')(request);
+
+let authorized = {}
+let authorizing = {}
+
+app.use(async (req, res, next) => {
+  let authCode = req.header("Authorization-Code")
+  let redirectUri = req.header("Redirect-Uri")
+
+  if(authCode && authorizing[authCode]){
+    let sleep = function (millis) {
+      return new Promise(resolve => setTimeout(resolve, millis));
+    }
+    while(authorizing[authCode]){
+      console.debug("User is being authorized, waiting: %s", JSON.stringify(authorizing))
+      await sleep(500)
+    }
+  }
+  if(authCode && authorized[authCode]) {
+    req._user = authorized[authCode]
+    next()
+  }
+  else {
+    authorizing[authCode] = true
+    let clientId = "special-platform"
+    let secret = "760b7a62-058d-4095-b090-ccf07d1d1b8f"
+    var clientServerOptions = {
+      "headers": {
+        // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
+        "Authorization": "Basic " + new Buffer(clientId + ':' + secret).toString('base64')
+      },
+      "uri": "http://localhost:8082/auth/realms/master/protocol/openid-connect/token",
+      // // See above, using "auth" does not work with request library for now
+      //"auth": {
+      //  "user": "special-platform",
+      //  "pass": "760b7a62-058d-4095-b090-ccf07d1d1b8f",
+      //  "sendImmediately": false
+      //},
+      "form": {
+        "grant_type": "authorization_code",
+        "redirect_uri": redirectUri,
+        "code": authCode
+      },
+      "json": true,
+      "method": "POST",
+      "content-type": "application/x-www-form-urlencoded"
+    }
+
+    request(clientServerOptions).then(response => {
+      let accessToken = response["access_token"]
+      var clientServerOptions = {
+        "uri": "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
+        "form": {
+          "access_token": accessToken
+        },
+        "json": true,
+        "method": "POST",
+        "content-type": "application/x-www-form-urlencoded"
+      }
+
+      return request(clientServerOptions)
+    })
+    .then(response => {
+      response["id"] = response["sub"]
+      delete response["sub"]
+      authorized[authCode] = response
+      req._user = authorized[authCode]
+      next()
+    })
+    .catch(error => {
+      console.error("Error when authorizing client: %s", error)
+      res.status(403).json(error)
+    })
+    .finally(() => {
+      delete authorizing[authCode]
+    })
+  }
+})
 
 // TODO: check if still needed
 app.use((req, res, next) => {
@@ -51,11 +130,15 @@ app.use((req, res, next) => {
   next()
 })
 
+app.use(bodyParser.json())
+app.use(createConnection)
+
 app.use(applications)
 app.use(dataSubjects)
 app.use(policies)
 
 app.use(closeConnection)
+app.use(errorHandler)
 
 // Handle SIGTERM gracefully
 process.on("SIGTERM", gracefulShutdown)
@@ -378,7 +461,7 @@ async function generateData () {
 
   promises.push(dataSubjectsTable.insert([
     {
-      "id": "9b84f8a5-e37c-4baf-8bdd-92135b1bc0f9",
+      "id": "ff4523f7-852e-4758-b7c6-a553c84487e1",
       "name": "Bernard Antoine",
       "policies": [
         "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998"
@@ -416,7 +499,7 @@ async function init () {
     watchDataSubjects()
     watchPolicies()
 
-    server = app.listen(8081, () => {
+    server = app.listen(8086, () => {
       const { address } = server.address()
       const { port } = server.address()
       console.debug("App listening at http://%s:%s", address, port)
@@ -426,21 +509,22 @@ async function init () {
 
 init()
 
-function handleError (res) {
-  return function (error) {
-    res.status(500).send({error: error.message})
-  }
-}
-
 function createConnection (req, res, next) {
   return r.connect({"host": dbHost, "port": dbPort}).then(function (conn) {
     req._rdbConn = conn
     console.debug("Creating connection to database for request %s...", req.url)
     next()
-  }).error(handleError(res))
+  }).catch(error => {next(error)})
 }
 
 function closeConnection (req, res, next) {
   console.debug("Closing connection to database for request %s...", req.url)
   req._rdbConn.close()
+  next()
+}
+
+function errorHandler (err, req, res, next) {
+  console.error("Error occurred in /consent-manager: %s", JSON.stringify(err))
+  res.status(500).json({"error": err.message})
+  next()
 }
