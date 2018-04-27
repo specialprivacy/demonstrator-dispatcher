@@ -499,7 +499,7 @@ async function init () {
     watchDataSubjects()
     watchPolicies()
 
-    server = app.listen(8086, () => {
+    server = app.listen(8081, () => {
       const { address } = server.address()
       const { port } = server.address()
       console.debug("App listening at http://%s:%s", address, port)
