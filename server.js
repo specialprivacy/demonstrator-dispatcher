@@ -61,14 +61,14 @@ app.use(async (req, res, next) => {
   }
   else {
     authorizing[authCode] = true
-    let clientId = "special-platform"
-    let secret = "760b7a62-058d-4095-b090-ccf07d1d1b8f"
+    let clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
+    let secret = process.env["AUTH_CLIENT_SECRET"] || "760b7a62-058d-4095-b090-ccf07d1d1b8f"
     var clientServerOptions = {
       "headers": {
         // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
         "Authorization": "Basic " + new Buffer(clientId + ':' + secret).toString('base64')
       },
-      "uri": "http://localhost:8082/auth/realms/master/protocol/openid-connect/token",
+      "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/token",
       // // See above, using "auth" does not work with request library for now
       //"auth": {
       //  "user": "special-platform",
@@ -88,7 +88,7 @@ app.use(async (req, res, next) => {
     request(clientServerOptions).then(response => {
       let accessToken = response["access_token"]
       var clientServerOptions = {
-        "uri": "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
+        "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
         "form": {
           "access_token": accessToken
         },
@@ -163,7 +163,6 @@ async function watchPolicies () {
     if (err) {
       console.error("Error occured when watching policies changes: %s", err)
     } else if (row["type"] === "remove") {
-      // TODO: Remove that ID from applications and data subjects
       let policyId = row["old_val"]["id"]
       // In order to populate that change logs topic, we need to keep in memory the deleted policies for some time
       deletedPolicies[policyId] = row["old_val"]
@@ -499,7 +498,7 @@ async function init () {
     watchDataSubjects()
     watchPolicies()
 
-    server = app.listen(8081, () => {
+    server = app.listen((process.env["SERVER_PORT"] || 8081), () => {
       const { address } = server.address()
       const { port } = server.address()
       console.debug("App listening at http://%s:%s", address, port)
