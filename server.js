@@ -524,6 +524,6 @@ function closeConnection (req, res, next) {
 
 function errorHandler (err, req, res, next) {
   console.error("Error occurred in /consent-manager: %s", JSON.stringify(err))
-  res.status(500).json({"error": err.message})
+  res.status(err.status || 500).json({"error": err.message})
   next()
 }
