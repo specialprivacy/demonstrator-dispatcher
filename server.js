@@ -498,7 +498,7 @@ async function init () {
     watchDataSubjects()
     watchPolicies()
 
-    server = app.listen((process.env["SERVER_PORT"] || 8081), () => {
+    server = app.listen((process.env["SERVER_PORT"] || 80), () => {
       const { address } = server.address()
       const { port } = server.address()
       console.debug("App listening at http://%s:%s", address, port)
