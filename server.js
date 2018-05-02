@@ -39,6 +39,21 @@ app.disable("x-powered-by")
 var request = require('request-promise');
 require('request-debug')(request);
 
+
+// TODO: check if still needed
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*")
+  res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With, Application-Id")
+
+  // intercepts OPTIONS method
+  if (req.method === "OPTIONS") {
+    // respond with 200
+    return res.status(200).send()
+  }
+  next()
+})
+
 let authorized = {}
 let authorizing = {}
 
@@ -60,6 +75,8 @@ app.use(async (req, res, next) => {
     next()
   }
   else {
+    const conn = await r.connect({"host": dbHost, "port": dbPort})
+
     authorizing[authCode] = true
     let clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
     let secret = process.env["AUTH_CLIENT_SECRET"] || "760b7a62-058d-4095-b090-ccf07d1d1b8f"
@@ -85,7 +102,8 @@ app.use(async (req, res, next) => {
       "content-type": "application/x-www-form-urlencoded"
     }
 
-    request(clientServerOptions).then(response => {
+    request(clientServerOptions)
+    .then(response => {
       let accessToken = response["access_token"]
       var clientServerOptions = {
         "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
@@ -104,31 +122,30 @@ app.use(async (req, res, next) => {
       delete response["sub"]
       authorized[authCode] = response
       req._user = authorized[authCode]
+      return authorized[authCode]
+    })
+    .then(user => {
+      user["policies"] = []
+      return dataSubjectsTable.insert(user, {
+        "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
+      }).run(conn)
+    })
+    .then(updateResult => {
+      console.debug("User [%s] updated: %s", req._user["id"], JSON.stringify(updateResult))
       next()
+      return req._user
     })
     .catch(error => {
       console.error("Error when authorizing client: %s", error)
-      res.status(403).json(error)
+      next({"code": 403, "message": "Not authorized"})
     })
     .finally(() => {
       delete authorizing[authCode]
+      conn.close()
     })
   }
 })
 
-// TODO: check if still needed
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With, Application-Id")
-
-  // intercepts OPTIONS method
-  if (req.method === "OPTIONS") {
-    // respond with 200
-    res.status(200).send()
-  }
-  next()
-})
 
 app.use(bodyParser.json())
 app.use(createConnection)
@@ -524,6 +541,7 @@ function closeConnection (req, res, next) {
 
 function errorHandler (err, req, res, next) {
   console.error("Error occurred in /consent-manager: %s", JSON.stringify(err))
+  if(req._rdbConn) req._rdbConn.close()
   res.status(err.status || 500).json({"error": err.message})
   next()
 }
