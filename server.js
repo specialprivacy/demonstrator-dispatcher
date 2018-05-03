@@ -61,23 +61,12 @@ app.use(async (req, res, next) => {
   let authCode = req.header("Authorization-Code")
   let redirectUri = req.header("Redirect-Uri")
 
-  if(authCode && authorizing[authCode]){
-    let sleep = function (millis) {
-      return new Promise(resolve => setTimeout(resolve, millis));
-    }
-    while(authorizing[authCode]){
-      console.debug("User is being authorized, waiting: %s", JSON.stringify(authorizing))
-      await sleep(500)
-    }
+  if(!authCode || !redirectUri) {
+    console.warn("Authorization request failed because it missed authCode or redirectUri")
+    return next({"code": 403, "message": "Not authorized"})
   }
-  if(authCode && authorized[authCode]) {
-    req._user = authorized[authCode]
-    next()
-  }
-  else {
-    const conn = await r.connect({"host": dbHost, "port": dbPort})
 
-    authorizing[authCode] = true
+  if(!authorized[authCode]) {
     let clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
     let secret = process.env["AUTH_CLIENT_SECRET"] || "760b7a62-058d-4095-b090-ccf07d1d1b8f"
     var clientServerOptions = {
@@ -102,48 +91,58 @@ app.use(async (req, res, next) => {
       "content-type": "application/x-www-form-urlencoded"
     }
 
-    request(clientServerOptions)
-    .then(response => {
-      let accessToken = response["access_token"]
-      var clientServerOptions = {
-        "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
-        "form": {
-          "access_token": accessToken
-        },
-        "json": true,
-        "method": "POST",
-        "content-type": "application/x-www-form-urlencoded"
-      }
+    let conn = null
+    authorized[authCode] = r.connect({"host": dbHost, "port": dbPort})
+    .then(dbconn => {
+        return conn = dbconn
+      })
+      .then(() => {
+        return request(clientServerOptions)
+      })
+      .then(response => {
+        let accessToken = response["access_token"]
+        var clientServerOptions = {
+          "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
+          "form": {
+            "access_token": accessToken
+          },
+          "json": true,
+          "method": "POST",
+          "content-type": "application/x-www-form-urlencoded"
+        }
 
-      return request(clientServerOptions)
-    })
-    .then(response => {
-      response["id"] = response["sub"]
-      delete response["sub"]
-      authorized[authCode] = response
-      req._user = authorized[authCode]
-      return authorized[authCode]
-    })
-    .then(user => {
-      user["policies"] = []
-      return dataSubjectsTable.insert(user, {
-        "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
-      }).run(conn)
-    })
-    .then(updateResult => {
-      console.debug("User [%s] updated: %s", req._user["id"], JSON.stringify(updateResult))
-      next()
-      return req._user
-    })
-    .catch(error => {
-      console.error("Error when authorizing client: %s", error)
-      next({"code": 403, "message": "Not authorized"})
-    })
-    .finally(() => {
-      delete authorizing[authCode]
-      conn.close()
-    })
+        return request(clientServerOptions)
+      })
+      .then(response => {
+        response["id"] = response["sub"]
+        delete response["sub"]
+        return response
+      })
+      .then(user => {
+        return dataSubjectsTable.insert(Object.assign(user, {"policies": []}), {
+          "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
+        }).run(conn).then(updateResult => {
+          console.debug("User [%s] updated: %s", user["id"], JSON.stringify(updateResult))
+          return user
+        })
+      })
+      .then(user => {
+        return user
+      })
+      .catch(error => {
+        console.error(error)
+        console.error("Error when authorizing client: %s", error)
+        return next({"code": 403, "message": "Not authorized"})
+      })
+      .finally(() => {
+        conn.close()
+      })
   }
+
+  authorized[authCode].then(user => {
+    req._user = user
+    next()
+  })
 })
 
 
