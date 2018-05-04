@@ -32,12 +32,12 @@ const {
   dataControllerPoliciesTable,
   dataSubjectsTable,
   dbTables
-  } = rethink
+} = rethink
 
 app.disable("x-powered-by")
 
 var request = require("request-promise")
-//require("request-debug")(request) // Uncomment to log HTTP requests
+// require("request-debug")(request) // Uncomment to log HTTP requests
 
 let redirectUri = null
 const baseAuthURL = process.env["AUTH_LOGIN_URL"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/auth"
@@ -62,7 +62,7 @@ async function init () {
     server = app.listen((process.env["SERVER_PORT"] || 80), (process.env["SERVER_HOST"] || "localhost"), () => {
       const { address } = server.address()
       const { port } = server.address()
-      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "http://"+address+":"+port+"/callback"
+      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "http://" + address + ":" + port + "/callback"
       console.debug("App listening at http://%s:%s", address, port)
     })
   })
@@ -78,27 +78,22 @@ const clientSecret = process.env["AUTH_CLIENT_SECRET"] || "special-platform-secr
 
 app.use("/callback", (req, res, next) => {
   const state = JSON.parse(Buffer.from(req.query.state, "base64"))
-  try{
-    if(state.nonce !== req.session.nonce) throw {"status": "403", "message": "Unknown state"}
-  }
-  catch(error){
-    return next(error)
-  }
+  if (state.nonce !== req.session.nonce) return next({"status": "403", "message": "Unknown state"})
 
   const authCode = req.query.code
 
   var clientServerOptions = {
     "headers": {
       // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
-      "Authorization": "Basic " + new Buffer(clientId + ":" + clientSecret).toString("base64")
+      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64")
     },
     "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/token",
     // // See above, using "auth" does not work with request library for now
-    //"auth": {
+    // "auth": {
     //  "user": "special-platform",
     //  "pass": "760b7a62-058d-4095-b090-ccf07d1d1b8f",
     //  "sendImmediately": false
-    //},
+    // },
     "form": {
       "grant_type": "authorization_code",
       "redirect_uri": redirectUri,
@@ -112,7 +107,8 @@ app.use("/callback", (req, res, next) => {
   let conn = null
   return r.connect({"host": dbHost, "port": dbPort})
     .then(dbconn => {
-      return conn = dbconn
+      conn = dbconn
+      return conn
     })
     .then(() => {
       return request(clientServerOptions)
@@ -138,7 +134,7 @@ app.use("/callback", (req, res, next) => {
     })
     .then(user => {
       return dataSubjectsTable.insert(Object.assign({}, user, {"policies": []}), {
-        "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
+        "conflict": function (id, oldDoc, newDoc) { return newDoc.merge({"policies": oldDoc("policies")}) }
       }).run(conn).then(updateResult => {
         console.debug("User [%s] updated: %s", user["id"], JSON.stringify(updateResult))
         return user
@@ -158,17 +154,15 @@ app.use("/callback", (req, res, next) => {
     .finally(() => {
       conn.close()
     })
-
 })
 
-app.use( (req, res, next) => {
-  if(req.session.authenticated) {
+app.use((req, res, next) => {
+  if (req.session.authenticated) {
     // Check authorization status (expired or not)
     return next()
   }
 
-  if(!req.session.nonce)
-  {
+  if (!req.session.nonce) {
     req.session.nonce = crypto.randomBytes(20).toString("hex")
   }
   const state = {
@@ -182,16 +176,14 @@ app.use( (req, res, next) => {
     {"redirect_uri": redirectUri},
     {"state": Buffer.from(JSON.stringify(state)).toString("base64")}
   ]
-  let authRedirect = baseAuthURL+"?"
+  let authRedirect = baseAuthURL + "?"
   for (let option of options) {
     for (let key of Object.keys(option)) {
       authRedirect += key + "=" + option[key] + "&"
     }
   }
   return res.status(401).location(authRedirect).end()
-
 })
-
 
 app.use(bodyParser.json())
 app.use(createConnection)
@@ -560,7 +552,7 @@ function createConnection (req, res, next) {
     req._rdbConn = conn
     console.debug("Creating connection to database for request %s...", req.url)
     next()
-  }).catch(error => {next(error)})
+  }).catch(error => { next(error) })
 }
 
 function closeConnection (req, res, next) {
@@ -572,7 +564,7 @@ function closeConnection (req, res, next) {
 function errorHandler (error, req, res, next) {
   console.error("Error occurred in /consent-manager: %s", JSON.stringify(error))
   console.error(error)
-  if(req._rdbConn) req._rdbConn.close()
+  if (req._rdbConn) req._rdbConn.close()
   res.status(error.status || 500).json({"error": error.message || error})
   next()
 }
