@@ -1,11 +1,13 @@
 // TODO: Add tests and documentation
 
 const app = require("express")()
+const session = require("express-session")
+const crypto = require("crypto")
 const bodyParser = require("body-parser")
 const Kafka = require("node-rdkafka")
 
 const http = require("http")
-http.globalAgent.maxSockets = 10
+http.globalAgent.maxSockets = process.env["HTTP_MAX_SOCKETS"] || 10
 
 const applications = require("./lib/applications")
 const dataSubjects = require("./lib/data-subjects")
@@ -13,10 +15,8 @@ const policies = require("./lib/policies")
 
 const producer = new Kafka.Producer({
   "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092, localhost:9094",
-  "api.version.request": false
+  "api.version.request": process.env["KAFKA_VERSION_REQUEST"] || false
 })
-
-
 
 const changeLogsTopic = process.env["CHANGE_LOGS_TOPIC"] || "policies-audit"
 const fullPolicyTopic = process.env["FULL_POLICIES_TOPIC"] || "full-policies"
@@ -36,113 +36,160 @@ const {
 
 app.disable("x-powered-by")
 
-var request = require('request-promise');
-require('request-debug')(request);
+var request = require("request-promise")
+//require("request-debug")(request) // Uncomment to log HTTP requests
 
+let redirectUri = null
+const baseAuthURL = process.env["AUTH_LOGIN_URL"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/auth"
+let server = null
+async function init () {
+  await generateData()
+  producer.connect({"timeout": process.env["KAFKA_TIMEOUT"] || 30000})
+  producer.on("connection.failure", function (error) {
+    console.error("Could not connect to Kafka, exiting: %s", error)
+    console.error(error)
+    process.exit(-1)
+  })
+  producer.on("event.error", function (error) {
+    console.error("Error from kafka producer: %s", error)
+    console.error(error)
+  })
+  producer.on("ready", async () => {
+    // Here we start the triggers on data subjects & policies changes
+    watchDataSubjects()
+    watchPolicies()
 
-// TODO: check if still needed
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*")
-  res.header("Access-Control-Allow-Methods", "GET, PUT, POST, DELETE, OPTIONS")
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization, Content-Length, X-Requested-With, Application-Id")
+    server = app.listen((process.env["SERVER_PORT"] || 80), (process.env["SERVER_HOST"] || "localhost"), () => {
+      const { address } = server.address()
+      const { port } = server.address()
+      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "http://"+address+":"+port+"/callback"
+      console.debug("App listening at http://%s:%s", address, port)
+    })
+  })
+}
+init()
 
-  // intercepts OPTIONS method
-  if (req.method === "OPTIONS") {
-    // respond with 200
-    return res.status(200).send()
+app.use(session({
+  secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex") || "super secret"
+}))
+
+const clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
+const clientSecret = process.env["AUTH_CLIENT_SECRET"] || "special-platform-secret"
+
+app.use("/callback", (req, res, next) => {
+  const state = JSON.parse(Buffer.from(req.query.state, "base64"))
+  try{
+    if(state.nonce !== req.session.nonce) throw {"status": "403", "message": "Unknown state"}
   }
-  next()
-})
-
-let authorized = {}
-let authorizing = {}
-
-app.use(async (req, res, next) => {
-  let authCode = req.header("Authorization-Code")
-  let redirectUri = req.header("Redirect-Uri")
-
-  if(!authCode || !redirectUri) {
-    console.warn("Authorization request failed because it missed authCode or redirectUri")
-    return next({"code": 403, "message": "Not authorized"})
+  catch(error){
+    return next(error)
   }
 
-  if(!authorized[authCode]) {
-    let clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
-    let secret = process.env["AUTH_CLIENT_SECRET"] || "760b7a62-058d-4095-b090-ccf07d1d1b8f"
-    var clientServerOptions = {
-      "headers": {
-        // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
-        "Authorization": "Basic " + new Buffer(clientId + ':' + secret).toString('base64')
-      },
-      "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/token",
-      // // See above, using "auth" does not work with request library for now
-      //"auth": {
-      //  "user": "special-platform",
-      //  "pass": "760b7a62-058d-4095-b090-ccf07d1d1b8f",
-      //  "sendImmediately": false
-      //},
-      "form": {
-        "grant_type": "authorization_code",
-        "redirect_uri": redirectUri,
-        "code": authCode
-      },
-      "json": true,
-      "method": "POST",
-      "content-type": "application/x-www-form-urlencoded"
-    }
+  const authCode = req.query.code
 
-    let conn = null
-    authorized[authCode] = r.connect({"host": dbHost, "port": dbPort})
+  var clientServerOptions = {
+    "headers": {
+      // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
+      "Authorization": "Basic " + new Buffer(clientId + ":" + clientSecret).toString("base64")
+    },
+    "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/token",
+    // // See above, using "auth" does not work with request library for now
+    //"auth": {
+    //  "user": "special-platform",
+    //  "pass": "760b7a62-058d-4095-b090-ccf07d1d1b8f",
+    //  "sendImmediately": false
+    //},
+    "form": {
+      "grant_type": "authorization_code",
+      "redirect_uri": redirectUri,
+      "code": authCode
+    },
+    "json": true,
+    "method": "POST",
+    "content-type": "application/x-www-form-urlencoded"
+  }
+
+  let conn = null
+  return r.connect({"host": dbHost, "port": dbPort})
     .then(dbconn => {
-        return conn = dbconn
-      })
-      .then(() => {
-        return request(clientServerOptions)
-      })
-      .then(response => {
-        let accessToken = response["access_token"]
-        var clientServerOptions = {
-          "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8082/auth/realms/master/protocol/openid-connect/userinfo",
-          "form": {
-            "access_token": accessToken
-          },
-          "json": true,
-          "method": "POST",
-          "content-type": "application/x-www-form-urlencoded"
-        }
+      return conn = dbconn
+    })
+    .then(() => {
+      return request(clientServerOptions)
+    })
+    .then(response => {
+      let accessToken = response["access_token"]
+      var clientServerOptions = {
+        "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/userinfo",
+        "form": {
+          "access_token": accessToken
+        },
+        "json": true,
+        "method": "POST",
+        "content-type": "application/x-www-form-urlencoded"
+      }
 
-        return request(clientServerOptions)
-      })
-      .then(response => {
-        response["id"] = response["sub"]
-        delete response["sub"]
-        return response
-      })
-      .then(user => {
-        return dataSubjectsTable.insert(Object.assign(user, {"policies": []}), {
-          "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
-        }).run(conn).then(updateResult => {
-          console.debug("User [%s] updated: %s", user["id"], JSON.stringify(updateResult))
-          return user
-        })
-      })
-      .then(user => {
+      return request(clientServerOptions)
+    })
+    .then(response => {
+      response["id"] = response["sub"]
+      delete response["sub"]
+      return response
+    })
+    .then(user => {
+      return dataSubjectsTable.insert(Object.assign({}, user, {"policies": []}), {
+        "conflict": function(id, oldDoc, newDoc){ return newDoc.merge({"policies": oldDoc("policies")})}
+      }).run(conn).then(updateResult => {
+        console.debug("User [%s] updated: %s", user["id"], JSON.stringify(updateResult))
         return user
       })
-      .catch(error => {
-        console.error(error)
-        console.error("Error when authorizing client: %s", error)
-        return next({"code": 403, "message": "Not authorized"})
-      })
-      .finally(() => {
-        conn.close()
-      })
+    })
+    .then(user => {
+      req.session.user = user
+      req.session.authenticated = true
+      res.redirect(state.referer)
+      return user
+    })
+    .catch(error => {
+      console.error("Error when authorizing client: %s", error)
+      console.error(error)
+      return next({"code": 403, "message": "Not authorized"})
+    })
+    .finally(() => {
+      conn.close()
+    })
+
+})
+
+app.use( (req, res, next) => {
+  if(req.session.authenticated) {
+    // Check authorization status (expired or not)
+    return next()
   }
 
-  authorized[authCode].then(user => {
-    req._user = user
-    next()
-  })
+  if(!req.session.nonce)
+  {
+    req.session.nonce = crypto.randomBytes(20).toString("hex")
+  }
+  const state = {
+    "nonce": req.session.nonce,
+    "referer": req.header("Referer")
+  }
+  const options = [
+    {"scope": "all"},
+    {"response_type": "code"},
+    {"client_id": clientId},
+    {"redirect_uri": redirectUri},
+    {"state": Buffer.from(JSON.stringify(state)).toString("base64")}
+  ]
+  let authRedirect = baseAuthURL+"?"
+  for (let option of options) {
+    for (let key of Object.keys(option)) {
+      authRedirect += key + "=" + option[key] + "&"
+    }
+  }
+  return res.status(401).location(authRedirect).end()
+
 })
 
 
@@ -175,9 +222,10 @@ async function watchPolicies () {
   console.debug("Starting to watch policies changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort})
   let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn)
-  return cursor.each(async (err, row) => {
-    if (err) {
-      console.error("Error occured when watching policies changes: %s", err)
+  return cursor.each(async (error, row) => {
+    if (error) {
+      console.error("Error occurred when watching policies changes: %s", error)
+      console.error(error)
     } else if (row["type"] === "remove") {
       let policyId = row["old_val"]["id"]
       // In order to populate that change logs topic, we need to keep in memory the deleted policies for some time
@@ -192,6 +240,7 @@ async function watchPolicies () {
         })
         .catch(error => {
           console.error("Could not update Applications to remove policy [%s]: %s", policyId, error)
+          console.error(error)
         })
 
       dataSubjectsTable
@@ -200,11 +249,12 @@ async function watchPolicies () {
         .run(conn)
         .then(updateResult => {
           console.debug("Data subjects updated to remove policy [%s]: %s", policyId, JSON.stringify(updateResult))
-          // By now, the kafka topic has probably been updated, we can safely remove the policy from the memory.
-          delete deletedPolicies[policyId]
+          // // By now, the kafka topic has probably been updated, we can safely remove the policy from the memory.
+          // delete deletedPolicies[policyId] // Let's keep the deleted policies in memory
         })
         .catch(error => {
           console.error("Could not update Applications to remove policy [%s]: %s", policyId, error)
+          console.error(error)
         })
     }
   }, () => {
@@ -216,8 +266,12 @@ async function watchDataSubjects () {
   console.debug("Starting to watch data subject changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort})
   let cursor = await dataSubjectsTable.changes({"includeInitial": true}).run(conn)
-  return cursor.each(async (err, row) => {
-    if (err) { console.error("Error occurred on data subject modification: %s", err) }
+  return cursor.each(async (error, row) => {
+    if (error) {
+      console.error("Error occurred on data subject modification: %s", error)
+      console.error(error)
+      return
+    }
 
     let policyIds = []
     if (row["old_val"]) {
@@ -237,6 +291,7 @@ async function watchDataSubjects () {
       })
     } catch (error) {
       console.error("Couldn't fetch policies: %s", error)
+      console.error(error)
     }
 
     let withdrawn = []
@@ -281,7 +336,7 @@ async function watchDataSubjects () {
       if (!message) {
         // Policy no longer exists in DB, checking deleted policies.
         console.debug("Policy [%s] deleted, checking recently deleted policies.", consent)
-        message = deletedPolicies[consent]
+        message = deletedPolicies[consent] || {}
         message["deleted-policy"] = true
       }
       message["given"] = false
@@ -312,6 +367,7 @@ async function watchDataSubjects () {
         )
       } catch (error) {
         console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", changeLogsTopic, error)
+        console.error(error)
       }
     }
 
@@ -326,6 +382,7 @@ async function watchDataSubjects () {
       )
     } catch (error) {
       console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", fullPolicyTopic, error)
+      console.error(error)
     }
   }, () => {
     return conn.close()
@@ -336,15 +393,15 @@ async function generateData () {
   let conn = await r.connect({"host": dbHost, "port": dbPort})
   console.debug("Creating database...")
   try {
-    await r.dbCreate(dbName).run(conn, function (err, result) {
-      if (!err) { console.debug("Database created: %s", result) }
+    await r.dbCreate(dbName).run(conn, function (error, result) {
+      if (!error) { console.debug("Database created: %s", result) }
     })
   } catch (error) { console.debug("Database already exists.") }
 
   console.debug("Creating tables...")
   try {
-    await r.expr(dbTables).forEach(db.tableCreate(r.row)).run(conn, function (err, result) {
-      if (!err) { console.debug("Tables created: %s", result) }
+    await r.expr(dbTables).forEach(db.tableCreate(r.row)).run(conn, function (error, result) {
+      if (!error) { console.debug("Tables created: %s", result) }
     })
   } catch (error) { console.debug("Tables already exist.") }
 
@@ -498,32 +555,6 @@ async function generateData () {
   })
 }
 
-let server = null
-async function init () {
-  await generateData()
-  producer.connect({"timeout": 30000})
-  producer.on("connection.failure", function (err) {
-    console.error("Could not connect to Kafka, exiting: %s", err)
-    process.exit(-1)
-  })
-  producer.on("event.error", function (err) {
-    console.error("Error from kafka producer: %s", err)
-  })
-  producer.on("ready", async () => {
-    // Here we start the triggers on data subjects & policies changes
-    watchDataSubjects()
-    watchPolicies()
-
-    server = app.listen((process.env["SERVER_PORT"] || 80), () => {
-      const { address } = server.address()
-      const { port } = server.address()
-      console.debug("App listening at http://%s:%s", address, port)
-    })
-  })
-}
-
-init()
-
 function createConnection (req, res, next) {
   return r.connect({"host": dbHost, "port": dbPort}).then(function (conn) {
     req._rdbConn = conn
@@ -538,9 +569,10 @@ function closeConnection (req, res, next) {
   next()
 }
 
-function errorHandler (err, req, res, next) {
-  console.error("Error occurred in /consent-manager: %s", JSON.stringify(err))
+function errorHandler (error, req, res, next) {
+  console.error("Error occurred in /consent-manager: %s", JSON.stringify(error))
+  console.error(error)
   if(req._rdbConn) req._rdbConn.close()
-  res.status(err.status || 500).json({"error": err.message})
+  res.status(error.status || 500).json({"error": error.message || error})
   next()
 }

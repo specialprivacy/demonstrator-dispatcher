@@ -23,7 +23,6 @@ TODO: Add build instructions for local and docker based development
 
 ## TODO
 1. Flesh out README
-1. Make port number configurable
 1. Clean up the code (too much stuff in server.js)
     * Remove base data as it can now be created
     * Move triggers to module
@@ -38,3 +37,7 @@ TODO: Add build instructions for local and docker based development
     * Base lib doesn't have connection pool, check other possibilities
 1. Set default ENV variables in Dockerfile
 1. Rename git repo
+1. Use something else than Memory Store for sessions
+1. Refresh token
+1. Use "secure" in express-session (need HTTPS though)
+1. List all possible ENV
