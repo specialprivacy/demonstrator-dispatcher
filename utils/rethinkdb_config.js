@@ -18,6 +18,7 @@ const dbTables = [applicationsTableName, dataControllerPoliciesTableName, dataSu
 module.exports = {
   dbHost,
   dbPort,
+  dbTimeout,
   r,
   dbName,
   db,
