@@ -25,6 +25,7 @@ const rethink = require("./utils/rethinkdb_config")
 const {
   dbHost,
   dbPort,
+  dbTimeout,
   r,
   dbName,
   db,
@@ -105,7 +106,7 @@ app.use("/callback", (req, res, next) => {
   }
 
   let conn = null
-  return r.connect({"host": dbHost, "port": dbPort})
+  return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
     .then(dbconn => {
       conn = dbconn
       return conn
@@ -212,7 +213,7 @@ function gracefulShutdown () {
 let deletedPolicies = {}
 async function watchPolicies () {
   console.debug("Starting to watch policies changes...")
-  let conn = await r.connect({"host": dbHost, "port": dbPort})
+  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
   let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
@@ -256,7 +257,7 @@ async function watchPolicies () {
 
 async function watchDataSubjects () {
   console.debug("Starting to watch data subject changes...")
-  let conn = await r.connect({"host": dbHost, "port": dbPort})
+  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
   let cursor = await dataSubjectsTable.changes({"includeInitial": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
@@ -382,7 +383,7 @@ async function watchDataSubjects () {
 }
 
 async function generateData () {
-  let conn = await r.connect({"host": dbHost, "port": dbPort})
+  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
   console.debug("Creating database...")
   try {
     await r.dbCreate(dbName).run(conn, function (error, result) {
@@ -548,7 +549,7 @@ async function generateData () {
 }
 
 function createConnection (req, res, next) {
-  return r.connect({"host": dbHost, "port": dbPort}).then(function (conn) {
+  return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout}).then(function (conn) {
     req._rdbConn = conn
     console.debug("Creating connection to database for request %s...", req.url)
     next()

@@ -2,6 +2,7 @@ const rethinkDB = require("rethinkdb")
 
 const dbHost = process.env["RETHINKDB_HOST"] || "localhost"
 const dbPort = process.env["RETHINKDB_PORT"] || 28015
+const dbTimeout = process.env["RETHINKDB_TIMEOUT"] || 30
 
 const r = rethinkDB
 const dbName = "changeLogsProducer"
