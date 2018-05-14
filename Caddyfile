@@ -28,6 +28,7 @@ rewrite {
   if {path} starts_with /users
   if {path} starts_with /applications
   if {path} starts_with /policies
+  if {path} starts_with /callback
   to /consent-manager{uri}
 }
 
