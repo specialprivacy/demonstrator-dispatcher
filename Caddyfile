@@ -14,8 +14,8 @@ tls {$EMAIL}
 # Serve a landingpage
 root /landingpage
 
-# Push-tester proxy
-proxy /transparency-backend {$SSE_PROXY} {
+# Transparency Backend
+proxy /transparency-backend {$TRANSPARENCY_BACKEND} {
   without /transparency-backend
   transparent
   header_upstream x-request-id {request_id}
