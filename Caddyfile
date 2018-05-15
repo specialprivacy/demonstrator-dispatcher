@@ -15,8 +15,8 @@ tls {$EMAIL}
 root /landingpage
 
 # Push-tester proxy
-proxy /sse-proxy {$SSE_PROXY} {
-  without /sse-proxy
+proxy /transparency-backend {$SSE_PROXY} {
+  without /transparency-backend
   transparent
   header_upstream x-request-id {request_id}
   header_upstream connection ""
