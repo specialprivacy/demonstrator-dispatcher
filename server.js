@@ -5,6 +5,7 @@ const session = require("express-session")
 const crypto = require("crypto")
 const bodyParser = require("body-parser")
 const Kafka = require("node-rdkafka")
+const querystring = require("querystring")
 
 const http = require("http")
 http.globalAgent.maxSockets = process.env["HTTP_MAX_SOCKETS"] || 10
@@ -12,6 +13,7 @@ http.globalAgent.maxSockets = process.env["HTTP_MAX_SOCKETS"] || 10
 const applications = require("./lib/applications")
 const dataSubjects = require("./lib/data-subjects")
 const policies = require("./lib/policies")
+const childlogger = require("./lib/middleware/child-logger")
 
 const producer = new Kafka.Producer({
   "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092, localhost:9094",
@@ -60,15 +62,17 @@ async function init () {
     watchDataSubjects()
     watchPolicies()
 
-    server = app.listen((process.env["SERVER_PORT"] || 80), (process.env["SERVER_HOST"] || "localhost"), () => {
-      const { address } = server.address()
-      const { port } = server.address()
-      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "http://" + address + ":" + port + "/callback"
+    server = app.listen(process.env["SERVER_PORT"] || 80, () => {
+      let { address, port } = server.address()
+      address = address === "::" ? "0.0.0.0" : address
+      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "/callback"
       console.debug("App listening at http://%s:%s", address, port)
     })
   })
 }
 init()
+
+app.use(childlogger)
 
 app.use(session({
   secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex") || "super secret"
@@ -86,7 +90,8 @@ app.use("/callback", (req, res, next) => {
   var clientServerOptions = {
     "headers": {
       // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
-      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64")
+      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64"),
+      "host": req.headers.host
     },
     "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/token",
     // // See above, using "auth" does not work with request library for now
@@ -170,19 +175,14 @@ app.use((req, res, next) => {
     "nonce": req.session.nonce,
     "referer": req.header("Referer")
   }
-  const options = [
-    {"scope": "all"},
-    {"response_type": "code"},
-    {"client_id": clientId},
-    {"redirect_uri": redirectUri},
-    {"state": Buffer.from(JSON.stringify(state)).toString("base64")}
-  ]
-  let authRedirect = baseAuthURL + "?"
-  for (let option of options) {
-    for (let key of Object.keys(option)) {
-      authRedirect += key + "=" + option[key] + "&"
-    }
+  const options = {
+    "scope": "all openid",
+    "response_type": "code",
+    "client_id": clientId,
+    "redirect_uri": redirectUri,
+    "state": Buffer.from(JSON.stringify(state)).toString("base64")
   }
+  let authRedirect = `${baseAuthURL}?${querystring.stringify(options)}`
   return res.status(401).location(authRedirect).end()
 })
 
