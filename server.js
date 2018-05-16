@@ -17,7 +17,8 @@ const childlogger = require("./lib/middleware/child-logger")
 
 const producer = new Kafka.Producer({
   "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092, localhost:9094",
-  "api.version.request": process.env["KAFKA_VERSION_REQUEST"] || false
+  "api.version.request": process.env["KAFKA_VERSION_REQUEST"] || false,
+  "dr_cb": true
 })
 
 const changeLogsTopic = process.env["CHANGE_LOGS_TOPIC"] || "policies-audit"
@@ -57,6 +58,15 @@ async function init () {
     console.error("Error from kafka producer: %s", error)
     console.error(error)
   })
+  producer.on("delivery-report", function (error, report) {
+    if (error) {
+      console.error("Error in kafka delivery report")
+      console.error(error)
+    } else {
+      console.log(`Kafka delivery report: ${JSON.stringify(report)}`)
+    }
+  })
+  producer.setPollInterval(100)
   producer.on("ready", async () => {
     // Here we start the triggers on data subjects & policies changes
     watchDataSubjects()
@@ -358,6 +368,7 @@ async function watchDataSubjects () {
           dataSubjectId,
           Date.now()
         )
+        producer.flush()
       } catch (error) {
         console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", changeLogsTopic, error)
         console.error(error)
@@ -373,6 +384,7 @@ async function watchDataSubjects () {
         dataSubjectId, // To ensure we only keep the latest set of policies
         Date.now()
       )
+      producer.flush()
     } catch (error) {
       console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", fullPolicyTopic, error)
       console.error(error)
