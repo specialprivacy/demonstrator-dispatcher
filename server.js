@@ -100,8 +100,7 @@ app.use("/callback", (req, res, next) => {
   var clientServerOptions = {
     "headers": {
       // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
-      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64"),
-      "host": req.headers.host
+      "Authorization": "Basic " + Buffer.from(clientId + ":" + clientSecret).toString("base64")
     },
     "uri": process.env["AUTH_TOKEN_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/token",
     // // See above, using "auth" does not work with request library for now
