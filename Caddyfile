@@ -11,6 +11,9 @@ errors stderr
 # Configure letsencrypt
 tls {$EMAIL}
 
+# Enable CORS for everything for now
+header / Access-Control-Allow-Origin *
+
 # Serve a landingpage
 root /landingpage
 
