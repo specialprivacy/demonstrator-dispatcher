@@ -24,12 +24,8 @@ TODO: Add build instructions for local and docker based development
 ## TODO
 1. Flesh out README
 1. Clean up the code (too much stuff in server.js)
-    * Remove base data as it can now be created
     * Move triggers to module
     * Move oauth middleware to lib
-        * Create user in rethinkDB (with empty policies) or update existing fields (without removing policies)
-        * Improve waiting method (push promise into hash, then other connections can .then() on it)
-1. Add structured logging
 1. Add support for kafka SSL
 1. Add support for kafka access management
 1. Restructure API
@@ -38,6 +34,7 @@ TODO: Add build instructions for local and docker based development
 1. Set default ENV variables in Dockerfile
 1. Rename git repo
 1. Use something else than Memory Store for sessions
-1. Refresh token
 1. Use "secure" in express-session (need HTTPS though)
 1. List all possible ENV
+1. Add logout (frontend should redirect to logout url, authentication service should then redirect to here on /logout, where the session would be cleared)
+1. Access token should be checked on every call to ensure it's still valid. If it's not, try to use refresh token, if outdated too, clear session then login again.
