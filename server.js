@@ -21,8 +21,8 @@ const producer = new Kafka.Producer({
   "dr_cb": true
 })
 
-const changeLogsTopic = process.env["CHANGE_LOGS_TOPIC"] || "policies-audit"
-const fullPolicyTopic = process.env["FULL_POLICIES_TOPIC"] || "full-policies"
+const changeLogsTopic = process.env["KAFKA_CHANGE_LOGS_TOPIC"] || "policies-audit"
+const fullPolicyTopic = process.env["KAFKA_FULL_POLICIES_TOPIC"] || "full-policies"
 
 const rethink = require("./utils/rethinkdb_config")
 const {
@@ -43,7 +43,7 @@ var request = require("request-promise")
 // require("request-debug")(request) // Uncomment to log HTTP requests
 
 let redirectUri = null
-const baseAuthURL = process.env["AUTH_LOGIN_URL"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/auth"
+const baseAuthURL = process.env["AUTH_LOGIN_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/auth"
 let server = null
 async function init () {
   await dataGenerator.generate()
@@ -74,7 +74,7 @@ async function init () {
     server = app.listen(process.env["SERVER_PORT"] || 80, () => {
       let { address, port } = server.address()
       address = address === "::" ? "0.0.0.0" : address
-      redirectUri = process.env["SERVER_AUTH_CALLBACK"] || "/callback"
+      redirectUri = process.env["SERVER_AUTH_CALLBACK_ENDPOINT"] || "/callback"
       console.debug("App listening at http://%s:%s", address, port)
     })
   })
