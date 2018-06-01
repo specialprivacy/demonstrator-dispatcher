@@ -84,7 +84,7 @@ init()
 app.use(childlogger)
 
 app.use(session({
-  secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex") || "super secret"
+  secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex")
 }))
 
 const clientId = process.env["AUTH_CLIENT_ID"] || "special-platform"
