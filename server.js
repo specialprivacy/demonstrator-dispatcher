@@ -12,12 +12,6 @@ const dataSubjects = require("./lib/data-subjects")
 const policies = require("./lib/policies")
 const rethink = require("./utils/rethinkdb_config")
 
-const {
-  dbHost,
-  dbPort,
-  dbTimeout,
-  r
-} = rethink
 const dataGenerator = require("./utils/data_generator")
 
 const watchers = require("./utils/watchers")
@@ -46,13 +40,13 @@ app.use(session({
 app.use(oauth)
 
 app.use(bodyParser.json())
-app.use(createConnection)
+app.use(rethink.createConnection)
 
 app.use(applications)
 app.use(dataSubjects)
 app.use(policies)
 
-app.use(closeConnection)
+app.use(rethink.closeConnection)
 app.use(errorHandler)
 
 // Handle SIGTERM gracefully
@@ -67,20 +61,6 @@ function gracefulShutdown () {
     console.warn("Received signal to terminate: done serving existing requests. Exiting")
     process.exit(0)
   })
-}
-
-function createConnection (req, res, next) {
-  return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout}).then(function (conn) {
-    req._rdbConn = conn
-    console.debug("Creating connection to database for request %s...", req.url)
-    next()
-  }).catch(error => { next(error) })
-}
-
-function closeConnection (req, res, next) {
-  console.debug("Closing connection to database for request %s...", req.url)
-  req._rdbConn.close()
-  next()
 }
 
 function errorHandler (error, req, res, next) {
