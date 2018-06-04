@@ -207,7 +207,6 @@ async function watchDataSubjects () {
           dataSubjectId,
           Date.now()
         )
-        producer.flush()
       } catch (error) {
         console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", changeLogsTopic, error)
         console.error(error)
@@ -223,11 +222,11 @@ async function watchDataSubjects () {
         dataSubjectId, // To ensure we only keep the latest set of policies
         Date.now()
       )
-      producer.flush()
     } catch (error) {
       console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", fullPolicyTopic, error)
       console.error(error)
     }
+    producer.flush()
   }, () => {
     return conn.close()
   })
