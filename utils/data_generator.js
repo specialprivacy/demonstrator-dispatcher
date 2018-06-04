@@ -10,12 +10,11 @@ const {
   dataControllerPoliciesTable,
   dataSubjectsTable,
   dbTables
-  } = rethink
+} = rethink
 
 module.exports = {
   generate: generateData
 }
-
 
 async function generateData () {
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})

@@ -92,10 +92,12 @@ const clientSecret = process.env["AUTH_CLIENT_SECRET"] || "special-platform-secr
 
 app.use("/callback", (req, res, next) => {
   const state = JSON.parse(Buffer.from(req.query.state, "base64"))
+  // To mitigate CSRF attacks, we ensure that the extra parameter we created when redirecting is the same as the once we received
   if (state.nonce !== req.session.nonce) return next({"status": "403", "message": "Unknown state"})
 
   const authCode = req.query.code
 
+  // Let's exchange the authorization code for an access token
   var clientServerOptions = {
     "headers": {
       // Using "auth" does not work with POST on request library for now, see: https://github.com/request/request/issues/2777
@@ -119,6 +121,7 @@ app.use("/callback", (req, res, next) => {
   }
 
   let conn = null
+  // Obtain the DB connection we will be using
   return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
     .then(dbconn => {
       conn = dbconn
@@ -129,6 +132,7 @@ app.use("/callback", (req, res, next) => {
     })
     .then(response => {
       let accessToken = response["access_token"]
+      // We've obtained our access token, we now need to use it to get the user information
       var clientServerOptions = {
         "uri": process.env["AUTH_USERINFO_ENDPOINT"] || "http://localhost:8080/auth/realms/master/protocol/openid-connect/userinfo",
         "form": {
@@ -147,6 +151,7 @@ app.use("/callback", (req, res, next) => {
       return response
     })
     .then(user => {
+      // We update the users table with the logged in user, if he didn't exist yet, we give him an empty set of policies, if he existed, we just updated his other information
       return dataSubjectsTable.insert(Object.assign({}, user, {"policies": []}), {
         "conflict": function (id, oldDoc, newDoc) { return newDoc.merge({"policies": oldDoc("policies")}) }
       }).run(conn).then(updateResult => {
@@ -172,7 +177,7 @@ app.use("/callback", (req, res, next) => {
 
 app.use((req, res, next) => {
   if (req.session.authenticated) {
-    // Check authorization status (expired or not)
+    // TODO: Check authorization status (expired or not)
     return next()
   }
 
@@ -181,6 +186,7 @@ app.use((req, res, next) => {
   }
   const state = {
     "nonce": req.session.nonce,
+    // The original request path, we will redirect to it after the authentication
     "referer": req.header("Referer")
   }
   const options = {
@@ -222,6 +228,7 @@ let deletedPolicies = {}
 async function watchPolicies () {
   console.debug("Starting to watch policies changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  // Watch changes to the Data Controller Policy table in order to propagate deletions.
   let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
@@ -233,7 +240,9 @@ async function watchPolicies () {
       deletedPolicies[policyId] = row["old_val"]
 
       applicationsTable
+        // Get applications which have this policy
         .filter(application => { return r.expr(application("policies")).coerceTo("array").contains(policyId) })
+        // Update those applications to remove the deleted policy
         .update({"policies": r.row("policies").difference([policyId])})
         .run(conn)
         .then(updateResult => {
@@ -245,7 +254,9 @@ async function watchPolicies () {
         })
 
       dataSubjectsTable
+        // Get data subjects who have this policy
         .filter(dataSubject => { return r.expr(dataSubject("policies")).coerceTo("array").contains(policyId) })
+        // Update those data subjects to remove the deleted policy
         .update({"policies": r.row("policies").difference([policyId])})
         .run(conn)
         .then(updateResult => {
@@ -266,6 +277,7 @@ async function watchPolicies () {
 async function watchDataSubjects () {
   console.debug("Starting to watch data subject changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  // Watch every change to the data subject table, including the ones that already exist
   let cursor = await dataSubjectsTable.changes({"includeInitial": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
@@ -274,25 +286,31 @@ async function watchDataSubjects () {
       return
     }
 
+    // A data subject has been modified. We now need to generate a new data subject profile and find the changes
     let policyIds = []
     if (row["old_val"]) {
+      // Get policy ids before update
       policyIds = policyIds.concat(row["old_val"]["policies"])
     }
     if (row["new_val"]) {
+      // Get policy ids after update
       policyIds = policyIds.concat(row["new_val"]["policies"])
     }
 
     let policies = {}
     try {
+      // Fetch data for the policies found above
       let cursor = await dataControllerPoliciesTable.getAll(r.args(r.expr(policyIds).distinct())).run(conn)
       let policiesArr = await cursor.toArray()
+      // We'll create a hash where the key is the ID of a policy and the value is the policy itself.
       policiesArr.forEach(policy => {
         policies[policy["id"]] = policy
         delete policy["id"]
       })
     } catch (error) {
-      console.error("Couldn't fetch policies: %s", error)
+      console.error("Couldn't fetch policies, can't update data subject profile: %s", error)
       console.error(error)
+      return
     }
 
     let withdrawn = []
@@ -300,13 +318,14 @@ async function watchDataSubjects () {
     let newPolicies = null
     let dataSubjectId = null
     if (!row["new_val"]) {
+      // The data subject was deleted
       dataSubjectId = row["old_val"]["id"]
-      // Remove policies from topic
       console.debug("User [%s] removed. ", dataSubjectId)
 
       withdrawn = row["old_val"]["policies"]
       newPolicies = null
     } else {
+      // The data subject was inserted or updated
       dataSubjectId = row["new_val"]["id"]
 
       if (row["old_val"]) {
@@ -320,7 +339,6 @@ async function watchDataSubjects () {
 
       // Create new list of policies for data subject
       console.debug("Data subject policies modified, generating new set of policies.")
-
       newPolicies = {
         "simplePolicies": row["new_val"]["policies"].map(policy => {
           let simplePolicy = Object.assign({}, policies[policy])
