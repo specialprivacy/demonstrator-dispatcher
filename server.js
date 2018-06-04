@@ -6,14 +6,12 @@ const bodyParser = require("body-parser")
 const http = require("http")
 http.globalAgent.maxSockets = process.env["HTTP_MAX_SOCKETS"] || 10
 const oauth = require("./lib/middleware/oauth")
-const childlogger = require("./lib/middleware/child-logger")
+const childLogger = require("./lib/middleware/child-logger")
 const applications = require("./lib/applications")
 const dataSubjects = require("./lib/data-subjects")
 const policies = require("./lib/policies")
 const rethink = require("./utils/rethinkdb_config")
-
 const dataGenerator = require("./utils/data_generator")
-
 const watchers = require("./utils/watchers")
 
 let server = null
@@ -31,21 +29,16 @@ async function init () {
 }
 init()
 
-app.use(childlogger)
-
+app.use(childLogger)
 app.use(session({
   secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex")
 }))
-
 app.use(oauth)
-
 app.use(bodyParser.json())
 app.use(rethink.createConnection)
-
 app.use(applications)
 app.use(dataSubjects)
 app.use(policies)
-
 app.use(rethink.closeConnection)
 app.use(errorHandler)
 
