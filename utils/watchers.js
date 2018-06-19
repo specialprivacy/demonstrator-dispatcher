@@ -163,6 +163,8 @@ async function watchDataSubjects () {
       // Create new list of policies for data subject
       console.debug("Data subject policies modified, generating new set of policies.")
       newPolicies = {
+        "timestamp": new Date().getTime(),
+        "userID": dataSubjectId,
         "simplePolicies": row["new_val"]["policies"].map(policy => {
           let simplePolicy = Object.assign({}, policies[policy])
           delete simplePolicy["explanation"]
