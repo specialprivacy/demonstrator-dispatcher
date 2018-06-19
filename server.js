@@ -40,7 +40,6 @@ app.use(rethink.createConnection)
 app.use("/applications", applications)
 app.use("/users", dataSubjects)
 app.use("/policies", policies)
-app.use(rethink.closeConnection)
 app.use(errorHandler)
 
 // Handle SIGTERM gracefully
@@ -60,7 +59,6 @@ function gracefulShutdown () {
 function errorHandler (error, req, res, next) {
   console.error("Error occurred in /consent-manager: %s", JSON.stringify(error))
   console.error(error)
-  if (req._rdbConn) req._rdbConn.close()
   res.status(error.status || 500).json({"error": error.message || error})
   next()
 }

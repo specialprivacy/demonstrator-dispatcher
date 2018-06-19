@@ -17,21 +17,21 @@ const dbTables = [applicationsTableName, dataControllerPoliciesTableName, dataSu
 
 function createConnection (req, res, next) {
   return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout}).then(function (conn) {
+    req.log.debug("Creating connection to database")
     req._rdbConn = conn
-    console.debug("Creating connection to database for request %s...", req.url)
+    res.on("finish", closeConnection.bind(null, req))
+    res.on("close", closeConnection.bind(null, req))
     next()
   }).catch(error => { next(error) })
 }
 
-function closeConnection (req, res, next) {
-  console.debug("Closing connection to database for request %s...", req.url)
+function closeConnection (req) {
+  req.log.debug("Closing connection to database")
   req._rdbConn.close()
-  next()
 }
 
 module.exports = {
   createConnection,
-  closeConnection,
   dbHost,
   dbPort,
   dbTimeout,
