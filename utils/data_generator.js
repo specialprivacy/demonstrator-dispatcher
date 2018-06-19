@@ -1,3 +1,4 @@
+const log = require("./log")
 const rethink = require("./rethinkdb_config")
 const {
   dbHost,
@@ -18,23 +19,23 @@ module.exports = {
 
 async function generateData () {
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
-  console.debug("Creating database...")
+  log.debug("Creating database...")
   try {
     await r.dbCreate(dbName).run(conn, function (error, result) {
-      if (!error) { console.debug("Database created: %s", result) }
+      if (!error) { log.debug({result}, "Database created") }
     })
-  } catch (error) { console.debug("Database already exists.") }
+  } catch (error) { log.debug("Database already exists.") }
 
-  console.debug("Creating tables...")
+  log.debug("Creating tables...")
   try {
     await r.expr(dbTables).forEach(db.tableCreate(r.row)).run(conn, function (error, result) {
-      if (!error) { console.debug("Tables created: %s", result) }
+      if (!error) { log.debug({result}, "Tables created") }
     })
-  } catch (error) { console.debug("Tables already exist.") }
+  } catch (error) { log.debug("Tables already exist.") }
 
   let promises = []
 
-  console.debug("Inserting base data")
+  log.debug("Inserting base data")
 
   promises.push(dataControllerPoliciesTable.insert([
     {
@@ -176,7 +177,7 @@ async function generateData () {
   ], {conflict: "replace"}).run(conn))
 
   return Promise.all(promises).then(resolved => {
-    console.debug("Data inserted")
+    log.debug("Data inserted")
 
     return conn.close()
   })

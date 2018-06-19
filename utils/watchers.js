@@ -1,4 +1,5 @@
 const Kafka = require("node-rdkafka")
+const log = require("./log")
 const producer = new Kafka.Producer({
   "metadata.broker.list": process.env["KAFKA_BROKER_LIST"] || "localhost:9092, localhost:9094",
   "api.version.request": process.env["KAFKA_VERSION_REQUEST"] || false,
@@ -22,20 +23,17 @@ const {
 function startWatching () {
   producer.connect({"timeout": process.env["KAFKA_TIMEOUT"] || 30000})
   producer.on("connection.failure", function (error) {
-    console.error("Could not connect to Kafka, exiting: %s", error)
-    console.error(error)
+    log.error({err: error}, "Could not connect to Kafka, exiting")
     process.exit(-1)
   })
   producer.on("event.error", function (error) {
-    console.error("Error from kafka producer: %s", error)
-    console.error(error)
+    log.error({err: error}, "Error from kafka producer")
   })
   producer.on("delivery-report", function (error, report) {
     if (error) {
-      console.error("Error in kafka delivery report")
-      console.error(error)
+      log.error({err: error}, "Error in kafka delivery report")
     } else {
-      console.log(`Kafka delivery report: ${JSON.stringify(report)}`)
+      log.info({report}, "Kafka delivery report")
     }
   })
   producer.setPollInterval(100)
@@ -49,14 +47,13 @@ function startWatching () {
 
 let deletedPolicies = {}
 async function watchPolicies () {
-  console.debug("Starting to watch policies changes...")
+  log.debug("Starting to watch policies changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
   // Watch changes to the Data Controller Policy table in order to propagate deletions.
   let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
-      console.error("Error occurred when watching policies changes: %s", error)
-      console.error(error)
+      log.error({err: error}, "Error occurred when watching policies changes")
     } else if (row["type"] === "remove") {
       let policyId = row["old_val"]["id"]
       // In order to populate that change logs topic, we need to keep in memory the deleted policies for some time
@@ -69,11 +66,10 @@ async function watchPolicies () {
         .update({"policies": r.row("policies").difference([policyId])})
         .run(conn)
         .then(updateResult => {
-          console.debug("Applications updated to remove policy [%s]: %s", policyId, JSON.stringify(updateResult))
+          log.debug({policyId, updateResult}, "Applications updated to remove policy")
         })
         .catch(error => {
-          console.error("Could not update Applications to remove policy [%s]: %s", policyId, error)
-          console.error(error)
+          log.error({policyId, err: error}, "Could not update Applications to remove policy")
         })
 
       dataSubjectsTable
@@ -83,13 +79,12 @@ async function watchPolicies () {
         .update({"policies": r.row("policies").difference([policyId])})
         .run(conn)
         .then(updateResult => {
-          console.debug("Data subjects updated to remove policy [%s]: %s", policyId, JSON.stringify(updateResult))
+          log.debug({policyId, updateResult}, "Data subjects updated to remove policy")
           // // By now, the kafka topic has probably been updated, we can safely remove the policy from the memory.
           // delete deletedPolicies[policyId] // Let's keep the deleted policies in memory
         })
         .catch(error => {
-          console.error("Could not update Applications to remove policy [%s]: %s", policyId, error)
-          console.error(error)
+          log.error({policyId, err: error}, "Could not update Applications to remove policy")
         })
     }
   }, () => {
@@ -98,14 +93,13 @@ async function watchPolicies () {
 }
 
 async function watchDataSubjects () {
-  console.debug("Starting to watch data subject changes...")
+  log.debug("Starting to watch data subject changes...")
   let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
   // Watch every change to the data subject table, including the ones that already exist
   let cursor = await dataSubjectsTable.changes({"includeInitial": true}).run(conn)
   return cursor.each(async (error, row) => {
     if (error) {
-      console.error("Error occurred on data subject modification: %s", error)
-      console.error(error)
+      log.error({err: error}, "Error occurred on data subject modification: %s", error)
       return
     }
 
@@ -131,8 +125,7 @@ async function watchDataSubjects () {
         delete policy["id"]
       })
     } catch (error) {
-      console.error("Couldn't fetch policies, can't update data subject profile: %s", error)
-      console.error(error)
+      log.error({err: error}, "Couldn't fetch policies, can't update data subject profile")
       return
     }
 
@@ -143,7 +136,7 @@ async function watchDataSubjects () {
     if (!row["new_val"]) {
       // The data subject was deleted
       dataSubjectId = row["old_val"]["id"]
-      console.debug("User [%s] removed. ", dataSubjectId)
+      log.debug({userId: dataSubjectId}, "User removed")
 
       withdrawn = row["old_val"]["policies"]
       newPolicies = null
@@ -161,7 +154,7 @@ async function watchDataSubjects () {
       }
 
       // Create new list of policies for data subject
-      console.debug("Data subject policies modified, generating new set of policies.")
+      log.debug("Data subject policies modified, generating new set of policies.")
       newPolicies = {
         "timestamp": new Date().getTime(),
         "userID": dataSubjectId,
@@ -175,11 +168,11 @@ async function watchDataSubjects () {
 
     let messages = []
     for (let consent of withdrawn) {
-      console.debug("Removing data subject [%s] consent for policy [%s].", dataSubjectId, consent)
+      log.debug({userId: dataSubjectId, policyId: consent}, "Removing data subject consent for policy")
       let message = policies[consent]
       if (!message) {
         // Policy no longer exists in DB, checking deleted policies.
-        console.debug("Policy [%s] deleted, checking recently deleted policies.", consent)
+        log.debug({policyId: consent}, "Policy deleted, checking recently deleted policies")
         message = deletedPolicies[consent] || {}
         message["deleted-policy"] = true
       }
@@ -191,7 +184,7 @@ async function watchDataSubjects () {
     }
 
     for (let consent of added) {
-      console.debug("Adding data subject [%s] consent for policy [%s].", dataSubjectId, consent)
+      log.debug({userId: dataSubjectId, policyId: consent}, "Adding data subject consent for policy")
       let message = Object.assign({}, policies[consent])
       message["given"] = true
       message["data-subject"] = dataSubjectId
@@ -201,7 +194,7 @@ async function watchDataSubjects () {
 
     for (let message of messages) {
       try {
-        console.debug("\nProducing on topic [%s] : %s\n", changeLogsTopic, JSON.stringify(message))
+        log.debug({topic: changeLogsTopic, message}, "Producing on topic")
         producer.produce(
           changeLogsTopic, // Topic
           null, // Partition, null uses default
@@ -210,13 +203,12 @@ async function watchDataSubjects () {
           Date.now()
         )
       } catch (error) {
-        console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", changeLogsTopic, error)
-        console.error(error)
+        log.error({topic: changeLogsTopic, err: error}, "An error occurred when trying to send message to Kafka topic")
       }
     }
 
     try {
-      console.debug("\nProducing on topic [%s] : %s\n", fullPolicyTopic, JSON.stringify(newPolicies))
+      log.debug({topic: fullPolicyTopic, message: newPolicies}, "Producing on topic")
       producer.produce(
         fullPolicyTopic, // Topic
         null, // Partition, null uses default
@@ -225,8 +217,7 @@ async function watchDataSubjects () {
         Date.now()
       )
     } catch (error) {
-      console.error("An error occurred when trying to send message to Kafka topic [%s]: %s", fullPolicyTopic, error)
-      console.error(error)
+      log.error({topic: fullPolicyTopic, err: error}, "An error occurred when trying to send message to Kafka topic")
     }
     producer.flush()
   }, () => {
