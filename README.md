@@ -12,6 +12,7 @@ The CI configuration takes care of testing the code and automatically building p
 
 ## Options
 All options are specified as environment variables for the nodejs process
+* **LOGGING_LEVEL**: The verbosity of the logs. oneOf: [`trace`, `debug`, `info`, `warn`, `error`, `fatal`] (_default_: `info`)
 * **SERVER_HOST**: The hostname of the server (_default_: `localhost`)
 * **SERVER_PORT**: The port of the server (_default_: `80`)
 * **SERVER_AUTH_CALLBACK_ENDPOINT**: The callback URL where the authentication server should redirect the user after authentication (_default_: `http://localhost/callback`)
