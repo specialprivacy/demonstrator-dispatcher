@@ -36,9 +36,9 @@ app.use(session({
 app.use(oauth)
 app.use(bodyParser.json())
 app.use(rethink.createConnection)
-app.use(applications)
-app.use(dataSubjects)
-app.use(policies)
+app.use("/applications", applications)
+app.use("/users", dataSubjects)
+app.use("/policies", policies)
 app.use(rethink.closeConnection)
 app.use(errorHandler)
 
