@@ -30,15 +30,16 @@ ENV SERVER_HOST=localhost \
   AUTH_USERINFO_ENDPOINT=http://localhost:8080/auth/realms/master/protocol/openid-connect/userinfo
 
 
-EXPOSE ${SERVER_PORT}
+EXPOSE 80
 ARG NODE_ENV=development
 CMD ["node", "server.js"]
 
 COPY --from=builder /app/package.json /app/package.json
 COPY --from=builder /app/node_modules /app/node_modules
 
-COPY utils /app/utils
 COPY server.js /app/server.js
+COPY app.js /app/app.js
+COPY utils /app/utils
 COPY lib /app/lib
 COPY test /app/test
 
