@@ -27,6 +27,10 @@ process.on("SIGINT", gracefulShutdown)
 process.on("SIGHUP", gracefulShutdown)
 function gracefulShutdown () {
   // Serve existing requests, but refuse new ones
+  if (server == null) {
+    log.warn("Received signal to terminate before initialization was complete. Exiting")
+    process.exit(0)
+  }
   log.warn("Received signal to terminate: wrapping up existing requests")
   server.close(() => {
     // Exit once all existing requests have been served

@@ -45,6 +45,8 @@ TODO: Add build instructions for local and docker based development
 1. Restructure API
 1. Reuse database connections (typically expensive to create, current behaviour will cause problems under load)
     * Base lib doesn't have connection pool, check other possibilities
+1. Centralise access to rethink so we only have to implement error handling and backoff once
+1. Centralise access to kafka so we only have to implement error handling and backoff once
 1. Rename git repo
 1. Use something else than Memory Store for sessions
 1. Use "secure" in express-session (need HTTPS though)

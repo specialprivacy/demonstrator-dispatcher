@@ -1,10 +1,9 @@
-const rethinkDB = require("rethinkdb")
+const r = require("rethinkdb")
 
 const dbHost = process.env["RETHINKDB_HOST"] || "localhost"
 const dbPort = process.env["RETHINKDB_PORT"] || 28015
 const dbTimeout = process.env["RETHINKDB_TIMEOUT"] || 30
 
-const r = rethinkDB
 const dbName = "changeLogsProducer"
 const db = r.db(dbName)
 const applicationsTableName = "applications"
@@ -22,7 +21,7 @@ function createConnection (req, res, next) {
     res.on("finish", closeConnection.bind(null, req))
     res.on("close", closeConnection.bind(null, req))
     next()
-  }).catch(error => { next(error) })
+  }).catch(error => next(error))
 }
 
 function closeConnection (req) {

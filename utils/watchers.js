@@ -9,7 +9,6 @@ const producer = new Kafka.Producer({
 const changeLogsTopic = process.env["KAFKA_CHANGE_LOGS_TOPIC"] || "policies-audit"
 const fullPolicyTopic = process.env["KAFKA_FULL_POLICIES_TOPIC"] || "full-policies"
 
-const rethink = require("./rethinkdb_config")
 const {
   dbHost,
   dbPort,
@@ -18,13 +17,23 @@ const {
   applicationsTable,
   dataControllerPoliciesTable,
   dataSubjectsTable
-} = rethink
+} = require("./rethinkdb_config")
+
+const MAX_RETRIES = 10
+let retryCount = 0
 
 function startWatching () {
-  producer.connect({"timeout": process.env["KAFKA_TIMEOUT"] || 30000})
+  const connectOptions = {"timeout": process.env["KAFKA_TIMEOUT"] || 5000}
+  producer.connect(connectOptions)
   producer.on("connection.failure", function (error) {
-    log.error({err: error}, "Could not connect to Kafka, exiting")
-    process.exit(-1)
+    if (retryCount >= MAX_RETRIES) {
+      log.error({err: error}, "Could not connect to Kafka, exiting")
+      process.exit(1)
+    }
+    retryCount++
+    const timeout = (Math.pow(2, retryCount) + Math.random()) * 1000
+    log.warn({err: error, timeout, retryCount}, `Failed to connect to kafka, retrying in ${timeout} ms`)
+    setTimeout(producer.connect.bind(producer), timeout, connectOptions)
   })
   producer.on("event.error", function (error) {
     log.error({err: error}, "Error from kafka producer")
@@ -46,9 +55,20 @@ function startWatching () {
 }
 
 let deletedPolicies = {}
-async function watchPolicies () {
+async function watchPolicies (retryCount = 0) {
   log.debug("Starting to watch policies changes...")
-  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  let conn
+  try {
+    conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  } catch (err) {
+    if (retryCount >= MAX_RETRIES) {
+      log.error({err}, "Failed to connect to rethinkdb and out of retries. Exiting.")
+      process.exit(1)
+    }
+    const timeout = (Math.pow(2, retryCount + 1) + Math.random()) * 1000
+    log.warn({err, timeout, retryCount}, `Failed to connect to rethinkdb retrying in ${timeout} ms`)
+    return setTimeout(watchPolicies, timeout, retryCount + 1)
+  }
   // Watch changes to the Data Controller Policy table in order to propagate deletions.
   let cursor = await dataControllerPoliciesTable.changes({"include_types": true}).run(conn)
   return cursor.each(async (error, row) => {
@@ -94,7 +114,18 @@ async function watchPolicies () {
 
 async function watchDataSubjects () {
   log.debug("Starting to watch data subject changes...")
-  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  let conn
+  try {
+    conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  } catch (err) {
+    if (retryCount >= MAX_RETRIES) {
+      log.error({err}, "Failed to connect to rethinkdb and out of retries. Exiting.")
+      process.exit(1)
+    }
+    const timeout = (Math.pow(2, retryCount + 1) + Math.random()) * 1000
+    log.warn({err, timeout, retryCount}, `Failed to connect to rethinkdb retrying in ${timeout} ms`)
+    return setTimeout(watchDataSubjects, timeout, retryCount + 1)
+  }
   // Watch every change to the data subject table, including the ones that already exist
   let cursor = await dataSubjectsTable.changes({"includeInitial": true}).run(conn)
   return cursor.each(async (error, row) => {

@@ -17,8 +17,21 @@ module.exports = {
   generate: generateData
 }
 
-async function generateData () {
-  let conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+const MAX_RETRIES = 10
+
+async function generateData (retryCount = 0) {
+  let conn
+  try {
+    conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+  } catch (err) {
+    if (retryCount >= MAX_RETRIES) {
+      log.error({err}, "Failed to connect to rethinkdb and out of retries. Exiting.")
+      process.exit(1)
+    }
+    const timeout = (Math.pow(2, retryCount + 1) + Math.random()) * 1000
+    log.warn({err, timeout, retryCount}, `Failed to connect to rethinkdb retrying in ${timeout} ms`)
+    return setTimeout(generateData, timeout, retryCount + 1)
+  }
   log.debug("Creating database...")
   try {
     await r.dbCreate(dbName).run(conn, function (error, result) {
