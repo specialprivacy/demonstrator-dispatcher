@@ -6,7 +6,12 @@ class APIError extends Error {
 
     this.name = "APIError"
     this._statusCode = options.statusCode || INTERNAL_SERVER_ERROR
-    if (options.error) this.stack = options.error.stack
+    if (options.error) {
+      this.stack = options.error.stack
+      this.message = options.error.message
+    } else if (options.message) {
+      this.message = options.message
+    }
     if (!Array.isArray(options)) options = [options]
 
     this.errors = options.map(setDefaults)
