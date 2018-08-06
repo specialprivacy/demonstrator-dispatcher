@@ -112,6 +112,29 @@ describe("APIError", () => {
 
       expect(input).to.have.property("stack", error.stack)
     })
+
+    it("Should copy the message from the wrapped error", () => {
+      const message = "I am the message"
+      const error = new Error(message)
+      const input = new APIError({error})
+
+      expect(input).to.have.property("message", error.message)
+    })
+
+    it("Should copy the message from the input options", () => {
+      const message = "I am the message"
+      const input = new APIError({message})
+
+      expect(input).to.have.property("message", message)
+    })
+
+    it("Should prefer the message of a wrapped error over the options message", () => {
+      const message = "I am the options message"
+      const error = new Error("I am the error message")
+      const input = new APIError({error, message})
+
+      expect(input).to.have.property("message", error.message)
+    })
   })
 
   describe("Getters and Setters", () => {

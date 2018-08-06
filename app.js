@@ -11,6 +11,7 @@ const applications = require("./lib/applications")
 const dataSubjects = require("./lib/data-subjects")
 const policies = require("./lib/policies")
 const rethink = require("./utils/rethinkdb_config")
+const jwtAuth = require("./lib/middleware/jwt-auth")
 
 app.disable("x-powered-by")
 
@@ -19,6 +20,8 @@ app.use(session({
   secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex")
 }))
 app.use("/callback", oauthCallback)
+app.use("/applications", jwtAuth, rethink.createConnection, applications)
+app.use("/policies", jwtAuth, rethink.createConnection, policies)
 app.use(authenticate)
 app.use(bodyParser.json())
 app.use(rethink.createConnection)
