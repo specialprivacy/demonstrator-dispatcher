@@ -8,7 +8,12 @@ let server = null
 http.globalAgent.maxSockets = process.env["HTTP_MAX_SOCKETS"] || 10
 
 async function init () {
-  await dataGenerator.generate()
+  try {
+    await dataGenerator.generate()
+  } catch (err) {
+    log.fatal({err}, "Failed to insert data")
+    process.exit(1)
+  }
   const { producer } = watchers
   watchers.startWatching()
   producer.on("ready", async () => {
