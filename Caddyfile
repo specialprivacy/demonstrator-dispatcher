@@ -11,8 +11,19 @@ errors stderr
 # Configure letsencrypt
 tls {$EMAIL}
 
+# Enable CORS for everything for now
+header / Access-Control-Allow-Origin *
+
 # Serve a landingpage
 root /landingpage
+
+# Mobile Frontend
+redir /mobile /mobile/
+proxy /mobile {$MOBILE_FRONTEND} {
+  without /mobile
+  transparent
+  header_upstream x-request-id {request_id}
+}
 
 # Transparency Backend
 proxy /transparency-backend {$TRANSPARENCY_BACKEND} {

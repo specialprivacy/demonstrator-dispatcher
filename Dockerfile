@@ -12,6 +12,7 @@ ENV POLICY_CRUD_UI=http://data-controller-policy-management-frontend
 ENV TRANSPARENCY_BACKEND=http://transparency-backend
 ENV KEYCLOAK=http://keycloak:8080
 ENV CONSENT_MANAGEMENT_BACKEND=http://consent-management-backend
+ENV MOBILE_FRONTEND=http://mobile-frontend
 
 RUN apk --update add ca-certificates
 
