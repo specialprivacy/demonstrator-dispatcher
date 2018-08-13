@@ -1,6 +1,6 @@
 {
   "name": "consent-management-backend",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Produces events on a kafka stream when an user signals a change to his consents",
   "main": "server.js",
   "scripts": {
