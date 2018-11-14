@@ -171,9 +171,8 @@ async function generateData (retryCount = 0) {
     }
   ], {conflict: "replace"}).run(conn))
 
-  return Promise.all(promises).then(resolved => {
+  return Promise.all(promises).then(() => {
     log.debug("Data inserted")
-
     return conn.close()
   })
 }
