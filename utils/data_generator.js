@@ -146,7 +146,7 @@ async function generateData (retryCount = 0) {
   promises.push(applicationsTable.insert([
     {
       "id": "d5aca7a6-ed5f-411c-b927-6f19c36b93c3",
-      "name": "Super application",
+      "name": "Application A",
       "policies":
         [
           "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998",
@@ -159,7 +159,7 @@ async function generateData (retryCount = 0) {
     },
     {
       "id": "c52dcc17-89f7-4a56-8836-bad27fd15bb3",
-      "name": "Super duper application",
+      "name": "Application B",
       "policies":
         [
           "be155566-7b56-4265-92fe-cb474aa0ed42",
