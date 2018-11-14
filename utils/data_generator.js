@@ -9,7 +9,6 @@ const {
   db,
   applicationsTable,
   dataControllerPoliciesTable,
-  dataSubjectsTable,
   dbTables
 } = rethink
 
@@ -169,23 +168,6 @@ async function generateData (retryCount = 0) {
           "86371d81-30ff-49c4-897f-5e6dbc721e85",
           "4d675233-279f-4b5e-8695-b0b66be4f0f9"
         ]
-    }
-  ], {conflict: "replace"}).run(conn))
-
-  promises.push(dataSubjectsTable.insert([
-    {
-      "id": "ff4523f7-852e-4758-b7c6-a553c84487e1",
-      "name": "Bernard Antoine",
-      "policies": [
-        "d5bbb4cc-59c0-4077-9f7e-2fad74dc9998"
-      ]
-    },
-    {
-      "id": "14f97114-bb25-43d2-85f9-b42c10538c09",
-      "name": "Roger Frederick",
-      "policies": [
-        "d308b593-a2ad-4d9f-bcc3-ff47f4acfe5c"
-      ]
     }
   ], {conflict: "replace"}).run(conn))
 
