@@ -20,6 +20,14 @@ app.use(session({
   secret: process.env["SESSION_SECRET"] || crypto.randomBytes(20).toString("hex")
 }))
 app.use(bodyParser.json())
+// TODO: Change CORS origin once domain have been decided
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*"); // for development purposes, can be later changed accordingly
+  res.header("Access-Control-Allow-Credentials", true);
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "location");
+  next();
+})
 app.use("/callback", oauthCallback)
 app.use("/applications", jwtAuth, rethink.createConnection, applications)
 app.use("/policies", jwtAuth, rethink.createConnection, policies)
