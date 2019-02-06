@@ -25,7 +25,7 @@ app.use((req, res, next) => {
   res.header("Access-Control-Allow-Origin", "*"); // for development purposes, can be later changed accordingly
   res.header("Access-Control-Allow-Credentials", true);
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "location");
+  res.header("Access-Control-Expose-Headers", "location");
   next();
 })
 app.use("/callback", oauthCallback)
