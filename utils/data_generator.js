@@ -21,27 +21,27 @@ const MAX_RETRIES = 10
 async function generateData (retryCount = 0) {
   let conn
   try {
-    conn = await r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout})
+    conn = await r.connect({ "host": dbHost, "port": dbPort, "timeout": dbTimeout })
   } catch (err) {
     if (retryCount >= MAX_RETRIES) {
-      log.error({err}, "Failed to connect to rethinkdb and out of retries. Exiting.")
+      log.error({ err }, "Failed to connect to rethinkdb and out of retries. Exiting.")
       process.exit(1)
     }
     const timeout = (Math.pow(2, retryCount + 1) + Math.random()) * 1000
-    log.warn({err, timeout, retryCount}, `Failed to connect to rethinkdb retrying in ${timeout} ms`)
+    log.warn({ err, timeout, retryCount }, `Failed to connect to rethinkdb retrying in ${timeout} ms`)
     return setTimeout(generateData, timeout, retryCount + 1)
   }
   log.debug("Creating database...")
   try {
     await r.dbCreate(dbName).run(conn, function (error, result) {
-      if (!error) { log.debug({result}, "Database created") }
+      if (!error) { log.debug({ result }, "Database created") }
     })
   } catch (error) { log.debug("Database already exists.") }
 
   log.debug("Creating tables...")
   try {
     await r.expr(dbTables).forEach(db.tableCreate(r.row)).run(conn, function (error, result) {
-      if (!error) { log.debug({result}, "Tables created") }
+      if (!error) { log.debug({ result }, "Tables created") }
     })
   } catch (error) { log.debug("Tables already exist.") }
 
@@ -140,7 +140,7 @@ async function generateData (retryCount = 0) {
       "recipientCollection": "http://www.specialprivacy.eu/vocabs/recipientsOtherRecipient",
       "explanation": "I consent to the aggregation of my derived data on third-party servers for the purpose of charity."
     }
-  ], {conflict: "replace"}).run(conn))
+  ], { conflict: "replace" }).run(conn))
 
   promises.push(applicationsTable.insert([
     {
@@ -169,7 +169,7 @@ async function generateData (retryCount = 0) {
           "4d675233-279f-4b5e-8695-b0b66be4f0f9"
         ]
     }
-  ], {conflict: "replace"}).run(conn))
+  ], { conflict: "replace" }).run(conn))
 
   return Promise.all(promises).then(() => {
     log.debug("Data inserted")

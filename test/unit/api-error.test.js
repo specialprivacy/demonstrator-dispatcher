@@ -1,8 +1,8 @@
 const APIError = require("../../utils/api-error")
 const AJV = require("ajv")
 const ajv = new AJV()
-const {BAD_REQUEST, INTERNAL_SERVER_ERROR} = require("http-status-codes")
-const {expect} = require("chai")
+const { BAD_REQUEST, INTERNAL_SERVER_ERROR } = require("http-status-codes")
+const { expect } = require("chai")
 const rewire = require("rewire")
 
 const errorSchema = require("../schemas/json-api-error.schema.json")
@@ -18,7 +18,7 @@ describe("APIError", () => {
     })
 
     it("Should return a jsonapi error when using an array of errors as argument", () => {
-      const input = new APIError([{}, {title: "error2"}])
+      const input = new APIError([{}, { title: "error2" }])
       expect(input.toJSON()).to.satisfy(errorValidator)
     })
 
@@ -95,7 +95,7 @@ describe("APIError", () => {
 
   describe("Constructor", () => {
     it("Should set the error statusCode to the options statusCode", () => {
-      const input = new APIError({statusCode: BAD_REQUEST})
+      const input = new APIError({ statusCode: BAD_REQUEST })
 
       expect(input).to.have.property("statusCode", BAD_REQUEST)
     })
@@ -108,7 +108,7 @@ describe("APIError", () => {
 
     it("Should copy the stacktrace from the wrapped error", () => {
       const error = new Error()
-      const input = new APIError({error})
+      const input = new APIError({ error })
 
       expect(input).to.have.property("stack", error.stack)
     })
@@ -116,14 +116,14 @@ describe("APIError", () => {
     it("Should copy the message from the wrapped error", () => {
       const message = "I am the message"
       const error = new Error(message)
-      const input = new APIError({error})
+      const input = new APIError({ error })
 
       expect(input).to.have.property("message", error.message)
     })
 
     it("Should copy the message from the input options", () => {
       const message = "I am the message"
-      const input = new APIError({message})
+      const input = new APIError({ message })
 
       expect(input).to.have.property("message", message)
     })
@@ -131,7 +131,7 @@ describe("APIError", () => {
     it("Should prefer the message of a wrapped error over the options message", () => {
       const message = "I am the options message"
       const error = new Error("I am the error message")
-      const input = new APIError({error, message})
+      const input = new APIError({ error, message })
 
       expect(input).to.have.property("message", error.message)
     })
@@ -139,7 +139,7 @@ describe("APIError", () => {
 
   describe("Getters and Setters", () => {
     it("Should set the error statusCode", () => {
-      const input = new APIError([{statusCode: INTERNAL_SERVER_ERROR}, {}])
+      const input = new APIError([{ statusCode: INTERNAL_SERVER_ERROR }, {}])
       input.statusCode = BAD_REQUEST
 
       expect(input).to.have.property("statusCode", BAD_REQUEST)
@@ -147,42 +147,42 @@ describe("APIError", () => {
 
     it("Should return the title attribute if there is only one wrapped error", () => {
       const title = "my-title"
-      const input = new APIError({title})
+      const input = new APIError({ title })
 
       expect(input).to.have.property("title", title)
     })
 
     it("Should return the detail attribute if there is only one wrapped error", () => {
       const detail = "my-detail"
-      const input = new APIError({detail})
+      const input = new APIError({ detail })
 
       expect(input).to.have.property("detail", detail)
     })
 
     it("Should return the source attribute if there is only one wrapped error", () => {
       const source = "my-source"
-      const input = new APIError({source})
+      const input = new APIError({ source })
 
       expect(input).to.have.property("source", source)
     })
 
     it("Should return an array of all titles if there are multiple wrapped errors", () => {
       const title = "my-title"
-      const input = new APIError([{title}, {}, {title}])
+      const input = new APIError([{ title }, {}, { title }])
 
       expect(input).to.have.property("title").that.deep.equals([title, "Server Error", title])
     })
 
     it("Should return an array of all details if there are multiple wrapped errors", () => {
       const detail = "my-detail"
-      const input = new APIError([{detail}, {}, {detail}])
+      const input = new APIError([{ detail }, {}, { detail }])
 
       expect(input).to.have.property("detail").that.deep.equals([detail, "Server Error", detail])
     })
 
     it("Should return an array of all pointers if there are multiple wrapped errors", () => {
       const source = "my-source"
-      const input = new APIError([{source}, {}, {source}])
+      const input = new APIError([{ source }, {}, { source }])
 
       expect(input).to.have.property("source").that.deep.equals([source, "/", source])
     })

@@ -1,4 +1,4 @@
-const {getStatusText, INTERNAL_SERVER_ERROR} = require("http-status-codes")
+const { getStatusText, INTERNAL_SERVER_ERROR } = require("http-status-codes")
 
 class APIError extends Error {
   constructor (options = {}) {
@@ -45,15 +45,15 @@ class APIError extends Error {
       code: error.statusCode.toString(),
       title: error.title,
       detail: error.detail,
-      source: {pointer: error.source}
+      source: { pointer: error.source }
     }))
-    return {errors}
+    return { errors }
   }
 }
 
 /**
  * Set Default values for the jsonapi error attributes
- * @param  {object} errors An object containing the jsonapi error attributes
+ * @param  {object} error An object containing the jsonapi error attributes
  * @return {object}        An object containing the jsonapi error attributes with appropriate default values
  */
 function setDefaults (error) {

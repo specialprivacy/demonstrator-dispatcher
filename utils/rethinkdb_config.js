@@ -15,7 +15,7 @@ const dataSubjectsTable = db.table(dataSubjectsTableName)
 const dbTables = [applicationsTableName, dataControllerPoliciesTableName, dataSubjectsTableName]
 
 function createConnection (req, res, next) {
-  return r.connect({"host": dbHost, "port": dbPort, "timeout": dbTimeout}).then(function (conn) {
+  return r.connect({ "host": dbHost, "port": dbPort, "timeout": dbTimeout }).then(function (conn) {
     req.log.debug("Creating connection to database")
     req._rdbConn = conn
     res.on("finish", closeConnection.bind(null, req))
