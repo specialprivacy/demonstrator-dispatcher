@@ -16,7 +16,7 @@ let app = proxyquire("../../../app.js", {
 })
 
 describe("error-handler", () => {
-  it("Should return a json error if content-type json was request", () => {
+  it.skip("Should return a json error if content-type json was request", () => {
     let resp = request(app)
       .get("/callback")
       .set("accept", "application/json")
