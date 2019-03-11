@@ -1,6 +1,5 @@
 let Ajv = require("ajv")
 let ajv = new Ajv()
-let APIError = require("../../../utils/api-error")
 let chai = require("chai")
 let expect = chai.expect
 let proxyquire = require("proxyquire")
@@ -11,10 +10,6 @@ let schema = require("../../schemas/json-api-error.schema.json")
 let schemaValidator = ajv.compile(schema)
 
 let app = proxyquire("../../../app.js", {
-  "./lib/middleware/oauth": {
-    authenticate: () => {},
-    oauthCallback: (req, res, next) => next(new APIError())
-  },
   "./utils/rethinkdb_config": {
     createConnection: () => {}
   }
