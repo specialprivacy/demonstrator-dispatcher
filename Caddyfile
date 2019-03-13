@@ -14,65 +14,7 @@ tls {$EMAIL}
 # Enable CORS for everything for now
 header / Access-Control-Allow-Origin *
 
-# Serve a landingpage
-root /landingpage
-
-# Mobile Frontend
-redir /mobile /mobile/
-proxy /mobile {$MOBILE_FRONTEND} {
-  without /mobile
+proxy / {$KONG} {
   transparent
   header_upstream x-request-id {request_id}
 }
-
-# Transparency Backend
-proxy /transparency-backend {$TRANSPARENCY_BACKEND} {
-  without /transparency-backend
-  transparent
-  header_upstream x-request-id {request_id}
-  header_upstream connection ""
-}
-
-# Consent Management Backend
-rewrite {
-  if_op or
-  if {path} starts_with /users
-  if {path} starts_with /applications
-  if {path} starts_with /policies
-  if {path} starts_with /callback
-  to /consent-manager{uri}
-}
-
-proxy /consent-manager {$CONSENT_MANAGEMENT_BACKEND} {
-  without /consent-manager
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
-# Transparency UI
-proxy /transparency {$TRANSPARENCY_UI} {
-  without /transparency
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
-# Consent UI
-proxy /consent {$CONSENT_UI} {
-  without /consent
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
-# Policy CRUD UI
-proxy /policy-crud {$POLICY_CRUD_UI} {
-  without /policy-crud
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
-# Keycloak
-proxy /auth {$KEYCLOAK} {
-  transparent
-  header_upstream x-request-id {request_id}
-}
-
