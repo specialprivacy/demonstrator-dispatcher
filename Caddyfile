@@ -14,7 +14,7 @@ tls {$EMAIL}
 # Enable CORS for everything for now
 header / Access-Control-Allow-Origin *
 
-proxy / {$KONG} {
+proxy / {$PROXY_TO} {
   transparent
   header_upstream x-request-id {request_id}
 }
