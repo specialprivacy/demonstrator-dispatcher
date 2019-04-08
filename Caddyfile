@@ -15,8 +15,8 @@ tls {$EMAIL}
 header / Access-Control-Allow-Origin *
 header / Access-Control-Allow-Credentials true
 header / Access-Control-Allow-Methods GET,POST,PUT,DELETE,OPTIONS
-header / Access-Control-Allow-Headers location,x-request-id,x-requested-with
-header / Access-Control-Expose-Headers location,x-request-id,x-requested-with
+header / Access-Control-Allow-Headers location,x-request-id,x-requested-with,application-id
+header / Access-Control-Expose-Headers location,x-request-id,x-requested-with,application-id
 
 proxy / {$PROXY_TO} {
   transparent
