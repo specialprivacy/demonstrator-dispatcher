@@ -23,6 +23,12 @@ proxy /auth {$KEYCLOAK_ENDPOINT} {
   header_upstream x-request-id {request_id}
 }
 
+proxy /xdc {$XDC_ENDPOINT} {
+  without /xdc
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
 proxy / {$KONG_ENDPOINT} {
   transparent
   header_upstream x-request-id {request_id}
