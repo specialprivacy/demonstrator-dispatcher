@@ -29,6 +29,21 @@ proxy /xdc {$XDC_ENDPOINT} {
   header_upstream x-request-id {request_id}
 }
 
+proxy /data-portability-requests http://data-portability:8080/ {
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
+proxy /data-portability-responses http://data-portability:8080/ {
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
+proxy /data-subjects http://data-portability:8080/ {
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
 proxy / {$KONG_ENDPOINT} {
   transparent
   header_upstream x-request-id {request_id}
