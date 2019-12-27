@@ -44,6 +44,12 @@ proxy /data-subjects http://data-portability:8080/ {
   header_upstream x-request-id {request_id}
 }
 
+proxy /dynamic-consent http://dynamic-consent/ {
+  without /dynamic-consent
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
 proxy / {$KONG_ENDPOINT} {
   transparent
   header_upstream x-request-id {request_id}
