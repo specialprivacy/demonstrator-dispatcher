@@ -50,6 +50,11 @@ proxy /dynamic-consent http://dynamic-consent/ {
   header_upstream x-request-id {request_id}
 }
 
+proxy /proxy http://linkedgeodata-proxy/ {
+  transparent
+  header_upstream x-request-id {request_id}
+}
+
 proxy / {$KONG_ENDPOINT} {
   transparent
   header_upstream x-request-id {request_id}
