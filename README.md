@@ -11,3 +11,6 @@ It also handles TLS termination when deployed onto a publicly accessible environ
 ## Configuration
 * DOMAIN: The domain this server should listen on, by default ":80".
 * EMAIL: The email used to get a certificate from TLS, by default "off", which prevents the application from trying to get one.
+* KEYCLOAK_ENDPOINT: The endpoint where keycloak can be reached, by default "".
+* KONG_ENDPOINT: The endpoint where kong can be reached, by default "".
+* XDC_ENDPOINT: The endpoint where the data inventory can be reached, by default "".
